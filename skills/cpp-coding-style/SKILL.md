@@ -156,7 +156,23 @@ resp->mutable_result()->Swap(&local_result);  // efficient transfer
 
 ## Configuration Flags (gflags + brpc dynamic flags)
 
-When a parameter is hardcoded but could reasonably be tuned (timeouts, thresholds, buffer sizes, log levels, etc.), extract it as a gflag instead of a magic constant.
+Treat a value as configuration when there is a reasonable chance that requirements,
+workloads, or deployment conditions will require it to change. Prefer a gflag over
+freezing such a value in a constant:
+
+```cpp
+// Avoid for a value that may need operational tuning.
+static constexpr uint32_t request_batch_size = 18;
+
+// Prefer this when different deployments may need different values.
+DEFINE_uint32(request_batch_size, 18, "Maximum requests processed per batch");
+```
+
+Do not apply this mechanically to every constant. `static constexpr` is appropriate for
+true invariants whose values are fixed by a protocol, data layout, mathematical relation,
+or compile-time requirement and should not vary over time or between deployments. For
+timeouts, thresholds, limits, buffer sizes, log levels, and similar operational values,
+prefer a gflag whenever future tuning is reasonably plausible.
 
 **Define with gflags:**
 ```cpp
