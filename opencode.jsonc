@@ -5,7 +5,7 @@
   "model": "OpenAI/gpt-5.6-sol",
   "small_model": "OpenAI/gpt-5.6-terra",
   "default_agent": "Main",
-  "enabled_providers": ["OpenAI", "xAI", "DeepSeek"],
+  "enabled_providers": ["OpenAI", "xAI", "DeepSeek", "Kimi"],
 
   "provider": {
     "OpenAI": {
@@ -94,6 +94,9 @@
           "name": "DeepSeek V4 Pro",
           "reasoning": true,
           "tool_call": true,
+          "options": {
+            "reasoningEffort": "max"
+          },
           "limit": {
             "context": 1000000,
             "output": 384000
@@ -103,9 +106,34 @@
           "name": "DeepSeek V4 Flash",
           "reasoning": true,
           "tool_call": true,
+          "options": {
+            "reasoningEffort": "max"
+          },
           "limit": {
             "context": 1000000,
             "output": 384000
+          }
+        }
+      }
+    },
+    "Kimi": {
+      "name": "Kimi",
+      "npm": "@ai-sdk/anthropic",
+      "options": {
+        "baseURL": "{env:OPENCODE_KIMI_ENDPOINT}",
+        "apiKey": "{env:OPENCODE_KIMI_KEY}"
+      },
+      "models": {
+        "kimi-k3": {
+          "name": "Kimi K3",
+          "reasoning": true,
+          "tool_call": true,
+          "options": {
+            "effort": "max"
+          },
+          "limit": {
+            "context": 1000000,
+            "output": 1048576
           }
         }
       }
