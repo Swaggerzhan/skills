@@ -195,7 +195,7 @@
 
   "agent": {
     "title": {
-      "model": "OpenAI/gpt-5.6-terra",
+      "model": "deepseek/deepseek-v4-flash",
       "variant": "max",
       // OpenCode 1.17.20 ignores variants on small-model requests.
       "options": {
