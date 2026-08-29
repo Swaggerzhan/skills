@@ -195,11 +195,11 @@
 
   "agent": {
     "title": {
-      "model": "deepseek/deepseek-v4-flash",
-      "variant": "max",
+      "model": "DeepSeek/deepseek-v4-flash",
+      "variant": "high",
       // OpenCode 1.17.20 ignores variants on small-model requests.
       "options": {
-        "reasoningEffort": "max"
+        "reasoningEffort": "high"
       },
       "steps": 1,
       "permission": {
