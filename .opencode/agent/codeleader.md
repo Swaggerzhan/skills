@@ -9,6 +9,10 @@ permission:
   bash: deny
   grep: allow
   simple_run: allow
+  read:
+    "build/**": deny
+  edit:
+    "build/**": deny
   task:
     "*": deny
     "Code": allow
