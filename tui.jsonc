@@ -20,8 +20,8 @@
     "model_list": "<leader>m",
     "command_list": "ctrl+p",
 
-    "input_submit": "ctrl+return",
-    "input_newline": "return,shift+return,alt+return,ctrl+j",
+    "input_submit": "return",
+    "input_newline": "ctrl+return,shift+return,alt+return,ctrl+j",
     "input_delete_to_line_end": "ctrl+k",
     "input_delete_to_line_start": "none",
     "input_delete": "delete,shift+delete",

@@ -179,6 +179,9 @@
     "glob": "allow",
     "grep": "allow",
     "list": "allow",
+    "git": "deny",
+    "openspec": "deny",
+    "simple_run": "deny",
     "bash": {
       "*": "allow",
       "rm -rf *": "deny",

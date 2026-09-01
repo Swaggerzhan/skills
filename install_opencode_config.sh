@@ -5,10 +5,11 @@
 #   opencode.jsonc      -> ~/.config/opencode/opencode.jsonc
 #   tui.jsonc           -> ~/.config/opencode/tui.jsonc
 #   .opencode/agent/    -> ~/.config/opencode/agent/
+#   .opencode/tool/     -> ~/.config/opencode/tool/
 #
 # Existing files/links at the targets are replaced (ln -sfn). A pre-existing
-# real directory at ~/.config/opencode/agent is moved aside once with a
-# timestamp suffix, since a symlink cannot replace a non-empty directory.
+# real directory at ~/.config/opencode/agent or tool is moved aside once with
+# a timestamp suffix, since a symlink cannot replace a non-empty directory.
 set -euo pipefail
 
 REPO_URL="${OPENCODE_CONFIG_REPO:-https://github.com/Swaggerzhan/skills.git}"
@@ -37,13 +38,15 @@ fi
 
 mkdir -p "$TARGET_DIR"
 
-# If the agent target is a real directory, move it aside once; a symlink
+# If an agent/tool target is a real directory, move it aside once; a symlink
 # cannot replace a non-empty directory with ln -sfn alone.
-if [ -d "$TARGET_DIR/agent" ] && [ ! -L "$TARGET_DIR/agent" ]; then
-  backup="$TARGET_DIR/agent.bak.$(date +%Y%m%d%H%M%S)"
-  log "moving existing agent directory to $backup"
-  mv "$TARGET_DIR/agent" "$backup"
-fi
+for name in agent tool; do
+  if [ -d "$TARGET_DIR/$name" ] && [ ! -L "$TARGET_DIR/$name" ]; then
+    backup="$TARGET_DIR/$name.bak.$(date +%Y%m%d%H%M%S)"
+    log "moving existing $name directory to $backup"
+    mv "$TARGET_DIR/$name" "$backup"
+  fi
+done
 
 log "linking opencode.jsonc"
 ln -sfn "$REPO_DIR/opencode.jsonc" "$TARGET_DIR/opencode.jsonc"
@@ -53,5 +56,8 @@ ln -sfn "$REPO_DIR/tui.jsonc" "$TARGET_DIR/tui.jsonc"
 
 log "linking agent directory"
 ln -sfn "$REPO_DIR/.opencode/agent" "$TARGET_DIR/agent"
+
+log "linking tool directory"
+ln -sfn "$REPO_DIR/.opencode/tool" "$TARGET_DIR/tool"
 
 log "done. restart opencode for changes to take effect."
