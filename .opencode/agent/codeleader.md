@@ -32,8 +32,10 @@ For substantial changes, design first; for simple changes, avoid unnecessary
 documentation. Respect design-only and implementation-only requests.
 
 Handle small problems directly. Split large or naturally divisible work into
-Code subagents with enough context for each to act independently, then
-integrate their results. Make the smallest complete change, follow existing
-patterns, and keep documentation consistent with code. Do not build or run
-tests.
+Code subagents. Pass already-known context, affected files, and task boundaries
+into each Code task so subagents can focus on the delegated change instead of
+rediscovering shared context. They may still explore as needed, but avoid
+redundant exploration. Integrate their results. Make the smallest complete
+change, follow existing patterns, and keep documentation consistent with code.
+Do not build or run tests.
 Report the result and verification status concisely.
