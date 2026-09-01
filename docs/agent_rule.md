@@ -301,6 +301,16 @@ v1 路径 `packages/opencode/src/session/llm/request.ts` 的顺序：
   被禁工具的 schema 直接不进请求。
 - 规则合并：defaults（`*: allow`）→ 全局用户 permission → agent permission 依次 merge、
   findLast 命中，后写的 deny 压过前面的 allow（`packages/opencode/src/agent/agent.ts`）。
+- 两级语义（活体子代理实验证实）：整工具 deny 后模型上报的工具列表里**没有**该工具
+  ——是"从请求删除"，不是"可见但调不动"；pattern 级 deny（如 `bash: {"rm *": "deny"}`）
+  工具保持可见，执行时抛 `DeniedError`，模型收到 `Tool execution denied.` 的 tool result。
+- MCP 工具吃同一套过滤：注册点 `Permission.visibleTools(mcp.tools(), ruleset)`
+  （`tool/registry.ts:286`）。`<server>_*: deny` + 逐名 `<server>_<tool>: allow`
+  可把模型可见的 MCP 工具面裁到任意子集。
+- MCP 工具命名（`mcp/catalog.ts:117-119`）：`sanitize(serverKey) + "_" + sanitize(tool)`，
+  仅做非法字符替换，**没有 `mcp_` 前缀**——server key `dep-search` 的工具是
+  `dep-search_search_graph`。因此 `mcp_*` 通配匹配不到任何真实 MCP 工具，配了等于没配
+  （默认 allow，全部暴露；实验中证实的正是这个现象）。
 - 联动的 Prompt 段：
   - `skill` 整体 deny → skills 段整段消失。
   - 某 MCP server 的工具全被 deny → 该 server 的 `<mcp_instructions>` 消失。
@@ -326,7 +336,7 @@ permission:
   websearch: deny
   lsp: deny
   plan_exit: deny
-  mcp_*: deny
+  # MCP 按 server key 封：<server>_*: deny（mcp_* 无效，见"工具过滤"节）
   execute: deny
 ---
 You write code and design documents only. You have no execution tool: you cannot run builds, tests, or commands. Verification happens outside this session. Never claim a test or build passed.
@@ -343,7 +353,9 @@ skill（目录列表走 read，没有独立 `ls` 工具）。
 - gpt 系模型会把 `edit`/`write` 换成 `apply_patch`（`tool/registry.ts:297-300` 的模型分派）。
 - `lsp` 只在 `experimentalLspTool` 开启时注册，`plan` 只在 `experimentalPlanMode` 开启时注册；
   deny 它们无害。
-- MCP 没有 agent 级一键开关；要么保持全局 `mcp: {}`，要么 `mcp_*` deny。
+- MCP 按 server 维度封：工具名是 `<server>_<tool>`，`<server>_*: deny` 封整个 server，
+  逐名 `<server>_<tool>: allow` 例外放行（findLast，allow 写在 deny 后）。
+  `mcp_*` 是无效 pattern，见"工具过滤"节。
 - 压不掉的 context：env 块、全局 AGENTS.md、agent prompt 本身。项目 AGENTS.md 可用
   `OPENCODE_DISABLE_PROJECT_CONFIG=1` 关闭。
 
@@ -467,7 +479,7 @@ mcp_* / execute 之后，一个专注写代码的 agent 剩余的能力面是 4 
 | `lsp` | lsp | LSP 语义导航（仅 `OPENCODE_EXPERIMENTAL_LSP_TOOL` 开启时注册） |
 | `plan_exit` | plan_exit | plan 模式退出（仅 experimentalPlanMode 开启时注册） |
 | `execute` | code-mode | 代码沙箱（仅 experimentalCodeMode 开启时注册） |
-| `mcp_<server>_<tool>` | MCP 工具 | 前缀 `mcp_`，支持 `mcp_*` 通配一键全封 |
+| `<server>_<tool>` | MCP 工具 | 名 = sanitize(serverKey)_sanitize(tool)，如 `dep-search_search_graph`；`<server>_*` 通配封整个 server，逐名 allow 例外；`mcp_*` 匹配不到真实工具名 |
 
 #### 守卫类（不是工具，permission 控制行为）
 
@@ -495,7 +507,7 @@ permission:
   websearch: deny
   lsp: deny           # 无 LSP 语义导航（当前收益不明确，直接封）
   plan_exit: deny     # 无 plan 模式切换
-  mcp_*: deny         # 无任何 MCP 工具
+  # MCP 按 server 封：<server>_*: deny（如 dep-search_*: deny）；mcp_* 匹配不到真实工具名
   execute: deny       # 无 code-mode 沙箱（本来也只在 experimentalCodeMode 开启且存在 MCP 工具时出现）
 ```
 

@@ -107,3 +107,12 @@ Remove all global Skills:
 ```bash
 npx skills remove --all -g
 ```
+
+## Optional: Dependency Graph Queries via codebase-memory-mcp
+
+Agents in this repository can additionally query a knowledge graph of external
+dependencies (symbol definitions, callers/callees, source snippets) through the
+`dep_search_*` MCP tools — generally more efficient than grep for structural
+queries. See [docs/codebase-memory-mcp.md](docs/codebase-memory-mcp.md) for how
+to install and index the dependency repositories, and how the agents are wired
+to use it.
