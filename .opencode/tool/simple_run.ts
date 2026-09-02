@@ -2,9 +2,11 @@
 // rm, rmdir) with literal argv via execFile. No shell, so pipes, redirects, and
 // arbitrary commands are structurally impossible. ls is fixed to
 // `ls -al <absolute path>`, rm to `rm -f <absolute path>`, rmdir to
-// `rmdir <absolute path>` (removes empty directories only). rm and rmdir take
-// exactly one path argument. The tool id is "simple_run" (the file name),
-// which is also the permission key.
+// `rmdir <absolute path>` (removes empty directories only).
+// All parameters are scalars because the TUI's generic-tool title renders only
+// primitive (string/number/boolean) inputs — an array parameter would be
+// invisible there. The tool id is "simple_run" (the file name), which is also
+// the permission key.
 
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
@@ -13,43 +15,53 @@ const exec = promisify(execFile)
 
 const WHITELIST = new Set(["git", "openspec", "ls", "rm", "rmdir"])
 
+// Splits an argument string on whitespace, grouping double- or single-quoted
+// segments. No escapes or expansion: this only decides argv boundaries and is
+// never interpreted by a shell.
+function splitArgv(input: string): string[] {
+  const out: string[] = []
+  for (const m of input.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) {
+    out.push(m[1] ?? m[2] ?? m[3])
+  }
+  return out
+}
+
 export default {
   description:
-    "Run a simple whitelisted command: git, openspec, ls, rm, or rmdir. ls, rm, and rmdir accept absolute paths only. ls runs as `ls -al <path>`. rm runs as `rm -f <path>` and rmdir as `rmdir <path>` (removes empty directories only); both take exactly one path argument, no flags or extras.",
+    "Run a simple whitelisted command: git, openspec, ls, rm, or rmdir. ls, rm, and rmdir take `path` (absolute paths only): ls runs as `ls -al <path>`, rm as `rm -f <path>`, rmdir as `rmdir <path>` (removes empty directories only). git and openspec take `args`, one argument string; quote any argument containing spaces, e.g. `commit -m \"message\"`.",
   args: {
     command: {
       type: "string",
       description: "Command to run, one of: git, openspec, ls, rm, rmdir",
     },
+    path: {
+      type: "string",
+      description: "Absolute path. Required by ls, rm, and rmdir; ignored otherwise",
+    },
     args: {
-      type: "array",
-      items: { type: "string" },
+      type: "string",
       description:
-        "Arguments for the command. ls takes absolute path(s) to list; rm and rmdir take exactly one absolute path",
+        'Argument string for git or openspec, e.g. `status --short` or `commit -m "message"`. Quote arguments containing spaces',
     },
   },
-  async execute(input: { command: string; args?: string[] }, ctx: { directory: string }) {
-    const { command, args = [] } = input
+  async execute(input: { command: string; path?: string; args?: string }, ctx: { directory: string }) {
+    const { command } = input
     if (!WHITELIST.has(command)) {
-      return `command not allowed: ${command} (whitelist: git, openspec, ls)`
+      return `command not allowed: ${command} (whitelist: git, openspec, ls, rm, rmdir)`
     }
-    // ls is fixed to `ls -al`; requiring absolute paths also blocks flag
-    // injection, since an argument starting with "/" is never parsed as a flag.
-    let argv = args
-    if (command === "ls") {
-      if (args.length === 0 || args.some((a) => !a.startsWith("/"))) {
-        return "ls requires an absolute path as its argument"
+    let argv: string[]
+    if (command === "git" || command === "openspec") {
+      argv = splitArgv(input.args ?? "")
+    } else {
+      // Requiring absolute paths also blocks flag injection, since an argument
+      // starting with "/" is never parsed as a flag.
+      const path = input.path ?? ""
+      if (!path.startsWith("/")) {
+        return `${command} requires an absolute path in the "path" argument`
       }
-      argv = ["-al", ...args]
-    }
-    // rm is fixed to `rm -f <path>` and rmdir to `rmdir <path>`: exactly one
-    // absolute path, no other arguments. rmdir itself refuses non-empty
-    // directories, so empty-only deletion needs no extra check.
-    if (command === "rm" || command === "rmdir") {
-      if (args.length !== 1 || !args[0].startsWith("/")) {
-        return `${command} requires exactly one absolute path as its argument`
-      }
-      argv = command === "rm" ? ["-f", args[0]] : args
+      if (command === "ls") argv = ["-al", path]
+      else if (command === "rm") argv = ["-f", path]
+      else argv = [path] // rmdir itself refuses non-empty directories
     }
     try {
       const out = await exec(command, argv, {

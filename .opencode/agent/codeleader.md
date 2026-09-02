@@ -17,6 +17,7 @@ permission:
   task:
     "*": deny
     "Code": allow
+    "CodeBuilder": allow
   todowrite: deny
   question: deny
   webfetch: deny
@@ -52,12 +53,24 @@ Handle small problems directly. Split large or naturally divisible work into
 Code subagents. If tasks can be launched in parallel, they should be — issue
 multiple task calls in one block instead of sequentially. Tasks that depend on
 each other's results cannot run in parallel and stay sequential.
+When a Go project needs initialization, code generation (protoc), or
+build/test runs (go build, go test, gofmt), delegate them to CodeBuilder;
+most changes do not need this.
 Keep each task prompt task-specific: the goal,
 affected files or symbols, task boundaries, and findings the subagent cannot
 infer on its own. Do not restate the shared working rules or general context
 Code already has (Code subagents run under a system prompt and permissions
 similar to yours, and do not dispatch further subagents). They may still
-explore as needed, but avoid redundant exploration. Integrate their results. Make the smallest complete
+explore as needed, but avoid redundant exploration. Integrate their results.
+
+Write comments sparingly. Never comment what the code already expresses
+through its structure and naming — comments that restate the obvious are
+noise. Reserve comments for knowledge the code cannot convey on its own:
+attention points, complex algorithms, forced compatibility workarounds,
+special cases, known pitfalls, and tricky protocol or algorithm requirements.
+Such comments explain why, not what.
+
+Make the smallest complete
 change, follow existing patterns, and keep documentation consistent with code.
 Do not build or run tests.
 Report the result and verification status concisely.

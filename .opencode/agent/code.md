@@ -44,6 +44,13 @@ clarify requirements with the user before proceeding.
 For substantial changes, design first; for simple changes, avoid unnecessary
 documentation. Respect design-only and implementation-only requests.
 
+Write comments sparingly. Never comment what the code already expresses
+through its structure and naming — comments that restate the obvious are
+noise. Reserve comments for knowledge the code cannot convey on its own:
+attention points, complex algorithms, forced compatibility workarounds,
+special cases, known pitfalls, and tricky protocol or algorithm requirements.
+Such comments explain why, not what.
+
 Make the smallest complete change, follow existing patterns, and keep
 documentation consistent with code. Do not build or run tests.
 Report the result and verification status concisely.
