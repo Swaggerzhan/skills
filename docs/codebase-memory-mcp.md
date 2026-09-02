@@ -97,7 +97,7 @@ opencode 里 MCP 工具名 = `sanitize(serverKey) + "_" + sanitize(tool)`，没�
 ### 按 agent 裁剪工具面
 
 permission 的整工具 deny 会把工具从模型视野里彻底删除（不是"可见但调不动"）。
-规则按 findLast 求值：宽规则在前，逐名 allow 在后。本项目的 Code / CodeLeader
+规则按 findLast 求值：宽规则在前，逐名 allow 在后。本项目的 Coder / CodeLeader
 agent 配置：
 
 ```yaml

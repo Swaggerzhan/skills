@@ -1,5 +1,5 @@
 ---
-name: Code
+name: Coder
 description: Understands architecture, writes design documents, and implements code.
 mode: all
 color: "#A855F7"

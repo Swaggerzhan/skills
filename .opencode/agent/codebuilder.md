@@ -4,7 +4,7 @@ description: Runs build, test, and code-generation commands (protoc, go build, g
 mode: subagent
 model: OpenAI/gpt-5.6-terra
 variant: xhigh
-color: "#F59E0B"
+color: "#A855F7"
 permission:
   edit: deny
   simple_run: deny
