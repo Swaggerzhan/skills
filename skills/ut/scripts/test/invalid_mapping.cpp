@@ -12,10 +12,6 @@
 
 class ExpectedFixtureTest : public testing::Test {};
 
-// @UT-CASE-BEGIN
-// @Case: mapped_case
-// @Status: done
-// @UT-CASE-END
 TEST_F(OtherFixtureTest, mapped_case) {
     EXPECT_TRUE(true);
 }

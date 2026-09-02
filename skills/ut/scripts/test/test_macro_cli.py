@@ -26,23 +26,28 @@ class MacroMappingTest(CliTestCase):
             },
         )
 
-    def test_todo_case_with_test_macro_is_rejected(self):
+    def test_implementing_a_todo_case_with_header_detail_is_rejected(self):
         macro = (
             "\nTEST_F(CacheServiceTest, refreshes_expired_value) {\n"
             "    EXPECT_TRUE(true);\n"
             "}\n"
         )
-        text = self.fixture_text("component.cpp") + macro
-        self.assert_invalid(self.run_text(text), "todo CASE 'refreshes_expired_value' already has")
+        text = self.fixture_text("sociable.cpp") + macro
+        self.assert_invalid(
+            self.run_text(text),
+            "implemented case 'refreshes_expired_value' must not keep detail in the HEADER",
+        )
 
-    def test_test_macro_without_case_block_is_rejected(self):
+    def test_test_macro_must_be_registered_in_header(self):
         macro = (
             "\nTEST_F(ParserLogicTest, orphan_macro) {\n"
             "    EXPECT_TRUE(true);\n"
             "}\n"
         )
         text = self.fixture_text("solitary.cpp") + macro
-        self.assert_invalid(self.run_text(text), "TEST_F case 'orphan_macro' has no CASE block")
+        self.assert_invalid(
+            self.run_text(text), "TEST_F case 'orphan_macro' is not registered in HEADER"
+        )
 
     def test_duplicate_test_macros_are_rejected(self):
         macro = (
@@ -53,13 +58,13 @@ class MacroMappingTest(CliTestCase):
         text = self.fixture_text("solitary.cpp") + macro
         self.assert_invalid(self.run_text(text), "multiple test macros implement 'parses_valid_value'")
 
-    def test_done_case_not_directly_above_macro_is_rejected(self):
+    def test_head_separated_from_macro_dangles(self):
         text = self.replace_fixture(
             "solitary.cpp",
-            "// @UT-CASE-END\nTEST_F(ParserLogicTest, parses_valid_value)",
-            "// @UT-CASE-END\nint separator = 0;\nTEST_F(ParserLogicTest, parses_valid_value)",
+            "// @Detail: verifies that a valid value is accepted.\nTEST_F(ParserLogicTest, parses_valid_value)",
+            "// @Detail: verifies that a valid value is accepted.\nint separator = 0;\nTEST_F(ParserLogicTest, parses_valid_value)",
         )
-        self.assert_invalid(self.run_text(text), "must sit directly above its test macro")
+        self.assert_invalid(self.run_text(text), "dangling '@Detail'")
 
     def test_macro_case_name_mismatch_is_rejected(self):
         text = self.replace_fixture(
@@ -67,27 +72,23 @@ class MacroMappingTest(CliTestCase):
             "TEST_F(ParserLogicTest, parses_valid_value)",
             "TEST_F(ParserLogicTest, different_case)",
         )
-        self.assert_invalid(self.run_text(text), "TEST_F case 'different_case' has no CASE block")
+        self.assert_invalid(
+            self.run_text(text), "TEST_F case 'different_case' is not registered in HEADER"
+        )
 
     def test_macro_before_header_is_rejected(self):
         macro = "TEST_F(ParserLogicTest, early_macro) {}\n"
         text = macro + self.fixture_text("solitary.cpp")
         self.assert_invalid(self.run_text(text), "HEADER must appear before all test macros")
 
-    def test_case_block_before_header_is_rejected(self):
-        block = (
-            "// @UT-CASE-BEGIN\n"
-            "// @Case: early_case\n"
-            "// @Status: todo\n"
-            "// @UT-CASE-END\n"
-        )
-        text = block + self.fixture_text("solitary.cpp")
-        self.assert_invalid(self.run_text(text), "CASE blocks must appear after HEADER")
+    def test_retired_case_anchor_before_header_is_rejected(self):
+        text = "// @UT-CASE-END\n" + self.fixture_text("solitary.cpp")
+        self.assert_invalid(self.run_text(text), "'@UT-CASE-END' is retired")
 
 
 class OutputContractTest(CliTestCase):
     def test_invalid_summary_emits_no_partial_json(self):
-        result = self.run_cli("invalid_status.cpp", "summary")
+        result = self.run_cli("invalid_unregistered_macro.cpp", "summary")
 
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stdout, "")
@@ -115,6 +116,7 @@ class OutputContractTest(CliTestCase):
             ],
         )
         self.assertEqual(summary["categories"][0]["name"], "Positive")
+        self.assertEqual(summary["categories"][0]["cases"], [])
         self.assertEqual(summary["categories"][0]["branches"][0]["status"], "done")
 
     def test_solitary_case_has_null_branch_and_setup(self):
@@ -138,8 +140,8 @@ class OutputContractTest(CliTestCase):
         self.assertIsNone(case["setup"])
 
     def test_summary_output_is_deterministic(self):
-        first = self.run_cli("component.cpp", "summary")
-        second = self.run_cli("component.cpp", "summary")
+        first = self.run_cli("sociable.cpp", "summary")
+        second = self.run_cli("sociable.cpp", "summary")
 
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(second.returncode, 0, second.stderr)
@@ -152,18 +154,21 @@ class OutputContractTest(CliTestCase):
         self.assertIn("was not found", result.stderr)
 
     def test_successful_verify_has_no_stderr(self):
-        result = self.run_cli("component.cpp", "verify")
+        result = self.run_cli("sociable.cpp", "verify")
 
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "OK\n")
         self.assertEqual(result.stderr, "")
 
     def test_diagnostic_contains_path_and_line(self):
-        result = self.run_cli("invalid_status.cpp", "verify")
+        result = self.run_cli("invalid_unregistered_macro.cpp", "verify")
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("invalid_status.cpp:", result.stderr)
-        self.assertRegex(result.stderr, r"invalid_status\.cpp:\d+: invalid @Status")
+        self.assertIn("invalid_unregistered_macro.cpp:", result.stderr)
+        self.assertRegex(
+            result.stderr,
+            r"invalid_unregistered_macro\.cpp:\d+: TEST_F case 'phantom_case' is not registered",
+        )
 
 
 class ArgumentAndFileErrorTest(CliTestCase):

@@ -2,7 +2,7 @@
 
 // @UT-HEADER-BEGIN
 // @Unit: MetadataServiceTest
-// @Tier: integration // solitary | component | integration
+// @Tier: integration
 // @Deps: rpc(mock), raft(inject)
 // @Desc: service requests driven through the RPC boundary.
 // @Args:
@@ -19,12 +19,8 @@ class MetadataServiceTest : public testing::TestWithParam<int> {};
 
 const char* macro_decoy = R"(TEST_F(WrongFixture, raw_string_decoy))";
 
-// @UT-CASE-BEGIN
-// @Case: accepts_supported_operation
-// @Status: done
 // @Detail: dispatches each supported operation to the service implementation.
 // @Setup: route RPC calls to the in-process service.
-// @UT-CASE-END
 TEST_P(
     MetadataServiceTest,
     accepts_supported_operation) {

@@ -30,43 +30,25 @@ class AnnotationParserTest(CliTestCase):
         )
         self.assert_invalid(self.run_text(text), "must occupy its own comment line")
 
-    def test_unmatched_case_end_anchor_is_rejected(self):
-        text = "// @UT-CASE-END\n" + self.fixture_text("solitary.cpp")
-        self.assert_invalid(self.run_text(text), "CASE end anchor has no begin anchor")
+    def test_retired_case_anchors_are_rejected(self):
+        text = "// @UT-CASE-BEGIN\n" + self.fixture_text("solitary.cpp")
+        self.assert_invalid(self.run_text(text), "'@UT-CASE-BEGIN' is retired")
 
-    def test_unclosed_case_block_is_rejected(self):
+    def test_retired_status_field_is_rejected(self):
         text = self.replace_fixture(
-            "invalid_done_without_test.cpp", "// @UT-CASE-END\n", ""
+            "solitary.cpp",
+            "// @Detail: verifies that a valid value is accepted.",
+            "// @Status: done\n// @Detail: verifies that a valid value is accepted.",
         )
-        self.assert_invalid(self.run_text(text), "CASE block has no end anchor")
+        self.assert_invalid(self.run_text(text), "'@Status' is retired")
 
-    def test_nested_case_block_is_rejected(self):
+    def test_retired_case_field_is_rejected(self):
         text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @UT-CASE-BEGIN\n",
-            "// @UT-CASE-BEGIN\n// @UT-CASE-BEGIN\n",
+            "solitary.cpp",
+            "// @Detail: verifies that a valid value is accepted.",
+            "// @Case: parses_valid_value\n// @Detail: verifies that a valid value is accepted.",
         )
-        self.assert_invalid(self.run_text(text), "nested CASE block")
-
-    def test_case_anchor_with_trailing_text_is_rejected(self):
-        text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @UT-CASE-BEGIN",
-            "// @UT-CASE-BEGIN extra",
-        )
-        self.assert_invalid(self.run_text(text), "must occupy its own comment line")
-
-    def test_case_block_inside_header_is_rejected(self):
-        block = (
-            "// @UT-CASE-BEGIN\n"
-            "// @Case: nested_case\n"
-            "// @Status: todo\n"
-            "// @UT-CASE-END\n"
-        )
-        text = self.replace_fixture(
-            "solitary.cpp", "// @UT-HEADER-END\n", block + "// @UT-HEADER-END\n"
-        )
-        self.assert_invalid(self.run_text(text), "CASE block cannot appear inside HEADER")
+        self.assert_invalid(self.run_text(text), "'@Case' is retired")
 
     def test_non_comment_header_content_is_rejected(self):
         text = self.replace_fixture(
@@ -75,14 +57,6 @@ class AnnotationParserTest(CliTestCase):
             "@Desc: parsing and validation of individual values.",
         )
         self.assert_invalid(self.run_text(text), "HEADER content must use line comments")
-
-    def test_non_comment_case_content_is_rejected(self):
-        text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @Status: done",
-            "@Status: done",
-        )
-        self.assert_invalid(self.run_text(text), "CASE content must use line comments")
 
     def test_unknown_header_field_is_rejected(self):
         text = self.replace_fixture(
@@ -98,33 +72,41 @@ class AnnotationParserTest(CliTestCase):
 
     def test_unknown_case_field_is_rejected(self):
         text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @Status: done",
-            "// @Status: done\n// @Owner: team",
+            "solitary.cpp",
+            "// @Detail: verifies that a valid value is accepted.",
+            "// @Owner: team\n// @Detail: verifies that a valid value is accepted.",
         )
-        self.assert_invalid(self.run_text(text), "unknown CASE field '@Owner'")
+        self.assert_invalid(self.run_text(text), "unknown case field '@Owner'")
 
     def test_duplicate_case_field_is_rejected(self):
         text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @Status: done",
-            "// @Status: done\n// @Status: done",
+            "solitary.cpp",
+            "// @Detail: verifies that a valid value is accepted.",
+            "// @Detail: one\n// @Detail: two",
         )
-        self.assert_invalid(self.run_text(text), "duplicate CASE field '@Status'")
+        self.assert_invalid(self.run_text(text), "duplicate case field '@Detail'")
+
+    def test_dangling_head_field_is_rejected(self):
+        text = self.fixture_text("solitary.cpp") + "\n// @Detail: floating note\n"
+        self.assert_invalid(
+            self.run_text(text), "dangling '@Detail': put it directly above a TEST_F/TEST_P"
+        )
+
+    def test_header_field_outside_header_is_rejected(self):
+        text = self.fixture_text("solitary.cpp") + "\n// @Tier: solitary\n"
+        self.assert_invalid(self.run_text(text), "'@Tier' belongs inside the HEADER block")
+
+    def test_category_anchor_outside_header_is_rejected(self):
+        text = self.fixture_text("solitary.cpp") + "\n// @Category-BEGIN: Positive\n"
+        self.assert_invalid(
+            self.run_text(text), "category anchors belong inside the HEADER block"
+        )
 
     def test_unknown_header_marker_is_rejected(self):
         text = self.replace_fixture(
             "solitary.cpp", "// @Tier: solitary", "// @Tier: solitary\n// * Unknown: value"
         )
         self.assert_invalid(self.run_text(text), "unknown HEADER marker")
-
-    def test_unknown_case_marker_is_rejected(self):
-        text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @Status: done",
-            "// @Status: done\n// * Unknown: value",
-        )
-        self.assert_invalid(self.run_text(text), "unknown CASE marker")
 
     def test_orphan_header_continuation_is_rejected(self):
         text = self.replace_fixture(
@@ -133,14 +115,6 @@ class AnnotationParserTest(CliTestCase):
             "//\n// orphan continuation\n// @Category-BEGIN: Positive",
         )
         self.assert_invalid(self.run_text(text), "orphan HEADER continuation line")
-
-    def test_orphan_case_continuation_is_rejected(self):
-        text = self.replace_fixture(
-            "invalid_done_without_test.cpp",
-            "// @UT-CASE-BEGIN\n// @Case:",
-            "// @UT-CASE-BEGIN\n// orphan continuation\n// @Case:",
-        )
-        self.assert_invalid(self.run_text(text), "orphan CASE continuation line")
 
     def test_nested_category_is_rejected(self):
         text = self.replace_fixture(

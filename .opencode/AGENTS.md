@@ -1,11 +1,5 @@
 # Project Rules
 
-This repository is used to create and produce Skills.
-
-- When creating or modifying Skills, follow the specifications and examples in the `agentskills/` directory.
-- All Skills created in this repository must be written in English only. Chinese content is not allowed.
-- All Skills must be created under the current project's `skills/` directory.
-
 ## Output Specifications
 
 If removing a section does not affect decision-making, do not include it.

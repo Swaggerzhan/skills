@@ -13,12 +13,10 @@ from typing import Any, Optional
 
 HEADER_BEGIN = "@UT-HEADER-BEGIN"
 HEADER_END = "@UT-HEADER-END"
-CASE_BEGIN = "@UT-CASE-BEGIN"
-CASE_END = "@UT-CASE-END"
+RETIRED_CASE_ANCHORS = ("@UT-CASE-BEGIN", "@UT-CASE-END")
 
-TIERS = {"solitary", "component", "integration"}
+TIERS = {"solitary", "sociable", "integration"}
 CATEGORIES = {"Positive", "Recovery", "Negative"}
-STATUSES = {"todo", "done"}
 DEPENDENCY_TYPES = {"mock", "inject"}
 BRANCH_PREFIXES = {
     "Positive": "BP",
@@ -26,8 +24,16 @@ BRANCH_PREFIXES = {
     "Negative": "BN",
 }
 
+HEADER_FIELDS = {"Unit", "Tier", "Deps", "Desc", "Args"}
+HEAD_FIELDS = {"Detail", "Setup"}
+RETIRED_FIELDS = {
+    "Case": "the case name comes from the TEST_F/TEST_P below",
+    "Status": "the status is derived from the presence of the TEST_F/TEST_P",
+}
+
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FIELD_RE = re.compile(r"^\s*@([A-Za-z][A-Za-z0-9-]*):\s*(.*)$")
+HEAD_FIELD_RE = re.compile(r"^@([A-Za-z][A-Za-z0-9-]*):\s*(.*)$")
 BRANCH_RE = re.compile(r"^\s*\*\s+Branch\s+(\S+):\s*(.*)$")
 CASE_REF_RE = re.compile(r"^\s*\*\s+Case:\s*(.*?)\s*$")
 CATEGORY_BEGIN_RE = re.compile(r"^\s*@Category-BEGIN:\s*(\S+)\s*$")
@@ -88,6 +94,7 @@ class CaseRef:
     line: int
     category: str
     branch_id: Optional[str]
+    detail: HumanText = field(default_factory=HumanText)
 
     @property
     def placeholder(self) -> bool:
@@ -120,8 +127,7 @@ class Header:
 
 @dataclass
 class CaseHead:
-    start_line: int
-    end_line: int
+    line: int
     fields: dict[str, ParsedField] = field(default_factory=dict)
 
     def value(self, name: str) -> Optional[str]:
@@ -137,6 +143,7 @@ class TestMacro:
     unit: str
     case_name: str
     line: int
+    head: Optional[CaseHead] = None
 
 
 @dataclass
@@ -145,7 +152,6 @@ class Document:
     text: str
     lines: list[str]
     header: Optional[Header]
-    case_heads: list[CaseHead]
     macros: list[TestMacro]
     diagnostics: list[Diagnostic]
     dependencies: list[Dependency] = field(default_factory=list)
@@ -174,36 +180,34 @@ class AnnotationParser:
         self._text = text
         self._lines = text.splitlines()
         self._diagnostics: list[Diagnostic] = []
+        self._head_block_lines: set[int] = set()
 
     def parse(self) -> Document:
         header_spans = self._find_blocks(HEADER_BEGIN, HEADER_END, "HEADER")
-        case_spans = self._find_blocks(CASE_BEGIN, CASE_END, "CASE")
 
         if len(header_spans) != 1:
             line = header_spans[1][0] if len(header_spans) > 1 else 1
             self._add_error(line, "expected exactly one HEADER block")
 
         header = self._parse_header(*header_spans[0]) if header_spans else None
-        case_heads = [self._parse_case_head(start, end) for start, end in case_spans]
         macros = self._parse_test_macros()
-
-        if header is not None:
-            for start, _ in case_spans:
-                if header.start_line <= start <= header.end_line:
-                    self._add_error(start, "CASE block cannot appear inside HEADER block")
+        self._parse_heads(header, macros)
+        self._check_stray_annotations(header)
 
         return Document(
             path=self._path,
             text=self._text,
             lines=self._lines,
             header=header,
-            case_heads=case_heads,
             macros=macros,
             diagnostics=self._diagnostics,
         )
 
     def _add_error(self, line: int, message: str) -> None:
         self._diagnostics.append(Diagnostic(line, message))
+
+    def _inside_header(self, header: Optional[Header], line_number: int) -> bool:
+        return header is not None and header.start_line <= line_number <= header.end_line
 
     def _find_blocks(
         self, begin_marker: str, end_marker: str, block_name: str
@@ -315,13 +319,13 @@ class AnnotationParser:
                     current_category.direct_cases.append(case_ref)
                 else:
                     current_branch.cases.append(case_ref)
-                continuation = None
+                continuation = case_ref.detail
                 continue
 
             field_match = FIELD_RE.match(payload)
             if field_match:
                 name = field_match.group(1)
-                if name not in {"Unit", "Tier", "Deps", "Desc", "Args"}:
+                if name not in HEADER_FIELDS:
                     self._add_error(line_number, f"unknown HEADER field '@{name}'")
                     continuation = None
                     continue
@@ -342,6 +346,10 @@ class AnnotationParser:
                 continuation = None
                 continue
 
+            if not payload[:1].isspace():
+                self._add_error(line_number, "orphan HEADER continuation line")
+                continuation = None
+                continue
             if continuation is None:
                 self._add_error(line_number, "orphan HEADER continuation line")
                 continue
@@ -350,51 +358,6 @@ class AnnotationParser:
         if current_category is not None:
             self._add_error(current_category.line, "category block has no end anchor")
         return header
-
-    def _parse_case_head(self, start_line: int, end_line: int) -> CaseHead:
-        case_head = CaseHead(start_line, end_line)
-        continuation: Optional[HumanText] = None
-
-        for line_number in range(start_line + 1, end_line):
-            payload = comment_payload(self._lines[line_number - 1])
-            if payload is None:
-                self._add_error(line_number, "CASE content must use line comments")
-                continuation = None
-                continue
-
-            stripped = payload.strip()
-            if not stripped:
-                continuation = None
-                continue
-
-            field_match = FIELD_RE.match(payload)
-            if field_match:
-                name = field_match.group(1)
-                if name not in {"Case", "Status", "Detail", "Setup"}:
-                    self._add_error(line_number, f"unknown CASE field '@{name}'")
-                    continuation = None
-                    continue
-                if name in case_head.fields:
-                    self._add_error(line_number, f"duplicate CASE field '@{name}'")
-                    continuation = None
-                    continue
-                parsed = ParsedField(name, line_number)
-                parsed.text.append(field_match.group(2))
-                case_head.fields[name] = parsed
-                continuation = parsed.text if name in {"Detail", "Setup"} else None
-                continue
-
-            if stripped.startswith("@") or stripped.startswith("*"):
-                self._add_error(line_number, f"unknown CASE marker '{stripped}'")
-                continuation = None
-                continue
-
-            if continuation is None:
-                self._add_error(line_number, "orphan CASE continuation line")
-                continue
-            continuation.append(stripped)
-
-        return case_head
 
     def _parse_test_macros(self) -> list[TestMacro]:
         sanitized = sanitize_cpp(self._text)
@@ -409,6 +372,110 @@ class AnnotationParser:
                 )
             )
         return macros
+
+    def _parse_heads(self, header: Optional[Header], macros: list[TestMacro]) -> None:
+        for macro in macros:
+            block: list[tuple[int, str]] = []
+            line_number = macro.line - 1
+            while line_number >= 1:
+                if self._inside_header(header, line_number):
+                    break
+                payload = comment_payload(self._lines[line_number - 1])
+                if payload is None:
+                    break
+                block.append((line_number, payload))
+                line_number -= 1
+            block.reverse()
+            self._head_block_lines.update(line for line, _ in block)
+            if block:
+                self._parse_head_block(macro, block)
+
+    def _parse_head_block(self, macro: TestMacro, block: list[tuple[int, str]]) -> None:
+        head = CaseHead(block[0][0])
+        continuation: Optional[HumanText] = None
+
+        for line_number, payload in block:
+            stripped = payload.strip()
+            if not stripped:
+                continuation = None
+                continue
+
+            if payload[:1].isspace():
+                if continuation is not None:
+                    continuation.append(stripped)
+                continue
+
+            field_match = HEAD_FIELD_RE.match(payload)
+            if field_match is None:
+                continuation = None
+                continue
+
+            name = field_match.group(1)
+            if name in RETIRED_FIELDS:
+                self._add_error(
+                    line_number, f"'@{name}' is retired: {RETIRED_FIELDS[name]}"
+                )
+                continuation = None
+                continue
+            if name not in HEAD_FIELDS:
+                self._add_error(line_number, f"unknown case field '@{name}'")
+                continuation = None
+                continue
+            if name in head.fields:
+                self._add_error(line_number, f"duplicate case field '@{name}'")
+                continuation = None
+                continue
+            parsed = ParsedField(name, line_number)
+            parsed.text.append(field_match.group(2))
+            head.fields[name] = parsed
+            continuation = parsed.text
+
+        if head.fields:
+            macro.head = head
+
+    def _check_stray_annotations(self, header: Optional[Header]) -> None:
+        for line_number, line in enumerate(self._lines, start=1):
+            if self._inside_header(header, line_number):
+                continue
+            if line_number in self._head_block_lines:
+                continue
+            payload = comment_payload(line)
+            if payload is None:
+                continue
+            token = payload.strip()
+
+            for anchor in RETIRED_CASE_ANCHORS:
+                if token == anchor:
+                    self._add_error(
+                        line_number,
+                        f"'{anchor}' is retired: case heads are plain '@' comments"
+                        " directly above the test macro",
+                    )
+
+            field_match = HEAD_FIELD_RE.match(payload)
+            if field_match:
+                name = field_match.group(1)
+                if name in RETIRED_FIELDS:
+                    self._add_error(
+                        line_number, f"'@{name}' is retired: {RETIRED_FIELDS[name]}"
+                    )
+                    continue
+                if name in HEAD_FIELDS:
+                    self._add_error(
+                        line_number,
+                        f"dangling '@{name}': put it directly above a TEST_F/TEST_P",
+                    )
+                    continue
+                if name in HEADER_FIELDS:
+                    self._add_error(
+                        line_number, f"'@{name}' belongs inside the HEADER block"
+                    )
+                    continue
+
+            if CATEGORY_BEGIN_RE.match(payload) or CATEGORY_END_RE.match(payload):
+                self._add_error(
+                    line_number, "category anchors belong inside the HEADER block"
+                )
 
 
 def sanitize_cpp(text: str) -> str:
@@ -521,14 +588,8 @@ def validate(document: Document) -> list[Diagnostic]:
         document.add_error(header.start_line, "HEADER must contain at least one category")
 
     deps_field = header.fields.get("Deps")
-    if tier == "solitary":
-        if deps_field is not None:
-            document.add_error(deps_field.line, "solitary tests must omit @Deps")
-    elif tier in {"component", "integration"}:
-        if deps_field is None:
-            document.add_error(header.start_line, f"{tier} tests require @Deps")
-        else:
-            parse_dependencies(document, deps_field.text.as_text(), deps_field.line)
+    if deps_field is not None:
+        parse_dependencies(document, deps_field.text.as_text(), deps_field.line)
 
     seen_categories: set[str] = set()
     seen_branches: set[str] = set()
@@ -541,45 +602,27 @@ def validate(document: Document) -> list[Diagnostic]:
             document.add_error(category.line, f"duplicate category '{category.name}'")
         seen_categories.add(category.name)
 
-        if tier == "solitary":
-            if category.branches:
+        refs = list(category.direct_cases)
+        expected_prefix = BRANCH_PREFIXES.get(category.name)
+        for branch in category.branches:
+            if branch.branch_id in seen_branches:
+                document.add_error(branch.line, f"duplicate branch id '{branch.branch_id}'")
+            seen_branches.add(branch.branch_id)
+            if expected_prefix and not re.fullmatch(
+                rf"{re.escape(expected_prefix)}[1-9][0-9]*", branch.branch_id
+            ):
                 document.add_error(
-                    category.branches[0].line, "solitary tests cannot contain branches"
+                    branch.line,
+                    f"branch '{branch.branch_id}' must use prefix '{expected_prefix}'",
                 )
-            refs = category.direct_cases
-        elif tier in {"component", "integration"}:
-            if category.direct_cases:
+            if not branch.cases:
+                document.add_error(branch.line, f"branch '{branch.branch_id}' has no cases")
+            if not branch.description.as_text():
                 document.add_error(
-                    category.direct_cases[0].line,
-                    f"{tier or 'non-solitary'} cases must be inside branches",
+                    branch.line,
+                    f"branch '{branch.branch_id}' must have a description",
                 )
-            if not category.branches:
-                document.add_error(category.line, "non-solitary category requires branches")
-            refs = []
-            expected_prefix = BRANCH_PREFIXES.get(category.name)
-            for branch in category.branches:
-                if branch.branch_id in seen_branches:
-                    document.add_error(branch.line, f"duplicate branch id '{branch.branch_id}'")
-                seen_branches.add(branch.branch_id)
-                if expected_prefix and not re.fullmatch(
-                    rf"{re.escape(expected_prefix)}[1-9][0-9]*", branch.branch_id
-                ):
-                    document.add_error(
-                        branch.line,
-                        f"branch '{branch.branch_id}' must use prefix '{expected_prefix}'",
-                    )
-                if not branch.cases:
-                    document.add_error(branch.line, f"branch '{branch.branch_id}' has no cases")
-                if not branch.description.as_text():
-                    document.add_error(
-                        branch.line,
-                        f"branch '{branch.branch_id}' must have a description",
-                    )
-                refs.extend(branch.cases)
-        else:
-            refs = list(category.direct_cases)
-            for branch in category.branches:
-                refs.extend(branch.cases)
+            refs.extend(branch.cases)
 
         if not category.direct_cases and not category.branches:
             document.add_error(category.line, f"category '{category.name}' has no cases")
@@ -596,44 +639,6 @@ def validate(document: Document) -> list[Diagnostic]:
                 continue
             case_refs[case_ref.name] = case_ref
 
-    case_heads: dict[str, CaseHead] = {}
-    for case_head in document.case_heads:
-        name_field = case_head.fields.get("Case")
-        status_field = case_head.fields.get("Status")
-        if name_field is None:
-            document.add_error(case_head.start_line, "CASE block is missing '@Case'")
-            continue
-        if status_field is None:
-            document.add_error(case_head.start_line, "CASE block is missing '@Status'")
-
-        name = machine_value(name_field.text.as_text())
-        status = machine_value(status_field.text.as_text()) if status_field else ""
-        if not name:
-            document.add_error(name_field.line, "@Case must not be empty")
-            continue
-        if not IDENTIFIER_RE.match(name):
-            document.add_error(name_field.line, f"invalid @Case '{name}'")
-            continue
-        if name in case_heads:
-            document.add_error(name_field.line, f"duplicate CASE block for '{name}'")
-            continue
-        case_heads[name] = case_head
-        if status_field is not None:
-            if not status:
-                document.add_error(status_field.line, "@Status must not be empty")
-            elif status not in STATUSES:
-                document.add_error(status_field.line, f"invalid @Status '{status}'")
-        if name not in case_refs:
-            document.add_error(name_field.line, f"CASE '{name}' is not registered in HEADER")
-        if tier == "solitary" and "Setup" in case_head.fields:
-            document.add_error(
-                case_head.fields["Setup"].line, "solitary CASE blocks must omit @Setup"
-            )
-
-    for name, case_ref in case_refs.items():
-        if name not in case_heads:
-            document.add_error(case_ref.line, f"HEADER case '{name}' has no CASE block")
-
     macros_by_name: dict[str, list[TestMacro]] = {}
     for macro in document.macros:
         macros_by_name.setdefault(macro.case_name, []).append(macro)
@@ -642,41 +647,25 @@ def validate(document: Document) -> list[Diagnostic]:
                 macro.line,
                 f"{macro.kind} unit '{macro.unit}' does not match @Unit '{unit}'",
             )
-        if macro.case_name not in case_heads:
-            document.add_error(macro.line, f"{macro.kind} case '{macro.case_name}' has no CASE block")
+        if macro.case_name not in case_refs:
+            document.add_error(
+                macro.line, f"{macro.kind} case '{macro.case_name}' is not registered in HEADER"
+            )
 
     for name, macros in macros_by_name.items():
         if len(macros) > 1:
             document.add_error(macros[1].line, f"multiple test macros implement '{name}'")
 
-    for name, case_head in case_heads.items():
-        status = machine_value(case_head.value("Status") or "")
-        matching_macros = macros_by_name.get(name, [])
-        adjacent_macro = macro_directly_below(document, case_head)
-
-        if status == "done":
-            if not matching_macros:
-                document.add_error(case_head.start_line, f"done CASE '{name}' has no test macro")
-            elif adjacent_macro is None:
-                document.add_error(
-                    case_head.start_line,
-                    f"done CASE '{name}' must sit directly above its test macro",
-                )
-            elif adjacent_macro.case_name != name:
-                document.add_error(
-                    adjacent_macro.line,
-                    f"test macro '{adjacent_macro.case_name}' does not match CASE '{name}'",
-                )
-        elif status == "todo" and matching_macros:
+    for name, case_ref in case_refs.items():
+        if case_ref.detail.items and name in macros_by_name:
             document.add_error(
-                matching_macros[0].line, f"todo CASE '{name}' already has a test macro"
+                case_ref.line,
+                f"implemented case '{name}' must not keep detail in the HEADER;"
+                " move it above its TEST_F",
             )
 
     if document.macros and header.end_line > min(macro.line for macro in document.macros):
         document.add_error(header.start_line, "HEADER must appear before all test macros")
-    for case_head in document.case_heads:
-        if case_head.start_line < header.end_line:
-            document.add_error(case_head.start_line, "CASE blocks must appear after HEADER")
     for line_number, line in enumerate(document.lines[header.end_line :], header.end_line + 1):
         if re.match(r"^\s*#\s*include\b", line):
             document.add_error(line_number, "all includes must appear before HEADER")
@@ -689,25 +678,15 @@ def normalized_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
     return sorted(unique.values(), key=lambda item: (item.line, item.message))
 
 
-def macro_directly_below(document: Document, case_head: CaseHead) -> Optional[TestMacro]:
-    next_line = case_head.end_line + 1
-    while next_line <= len(document.lines) and not document.lines[next_line - 1].strip():
-        next_line += 1
-    for macro in document.macros:
-        if macro.line == next_line:
-            return macro
-    return None
-
-
-def case_status(case_ref: CaseRef, case_heads: dict[str, CaseHead]) -> str:
+def case_status(case_ref: CaseRef, macros_by_name: dict[str, list[TestMacro]]) -> str:
     if case_ref.placeholder:
         return "todo"
     assert case_ref.name is not None
-    return machine_value(case_heads[case_ref.name].value("Status") or "")
+    return "done" if case_ref.name in macros_by_name else "todo"
 
 
-def branch_status(branch: Branch, case_heads: dict[str, CaseHead]) -> str:
-    statuses = [case_status(case_ref, case_heads) for case_ref in branch.cases]
+def branch_status(branch: Branch, macros_by_name: dict[str, list[TestMacro]]) -> str:
+    statuses = [case_status(case_ref, macros_by_name) for case_ref in branch.cases]
     if all(status == "done" for status in statuses):
         return "done"
     if all(status == "todo" for status in statuses):
@@ -715,47 +694,49 @@ def branch_status(branch: Branch, case_heads: dict[str, CaseHead]) -> str:
     return "partial"
 
 
-def case_ref_json(case_ref: CaseRef, case_heads: dict[str, CaseHead]) -> dict[str, Any]:
+def case_ref_json(case_ref: CaseRef, macros_by_name: dict[str, list[TestMacro]]) -> dict[str, Any]:
     return {
         "name": case_ref.name,
         "placeholder": case_ref.placeholder,
-        "status": case_status(case_ref, case_heads),
+        "status": case_status(case_ref, macros_by_name),
     }
 
 
 def summary_json(document: Document) -> dict[str, Any]:
     assert document.header is not None
     header = document.header
-    tier = machine_value(field_value(header, "Tier") or "")
-    case_heads = {
-        machine_value(head.value("Case") or ""): head for head in document.case_heads
-    }
+    macros_by_name: dict[str, list[TestMacro]] = {}
+    for macro in document.macros:
+        macros_by_name.setdefault(macro.case_name, []).append(macro)
     categories: list[dict[str, Any]] = []
 
     for category in header.categories:
-        category_json: dict[str, Any] = {"name": category.name}
-        if tier == "solitary":
-            category_json["cases"] = [
-                case_ref_json(case_ref, case_heads) for case_ref in category.direct_cases
-            ]
-        else:
-            category_json["branches"] = [
-                {
-                    "id": branch.branch_id,
-                    "description": branch.description.as_text(),
-                    "status": branch_status(branch, case_heads),
-                    "cases": [
-                        case_ref_json(case_ref, case_heads) for case_ref in branch.cases
-                    ],
-                }
-                for branch in category.branches
-            ]
-        categories.append(category_json)
+        categories.append(
+            {
+                "name": category.name,
+                "cases": [
+                    case_ref_json(case_ref, macros_by_name)
+                    for case_ref in category.direct_cases
+                ],
+                "branches": [
+                    {
+                        "id": branch.branch_id,
+                        "description": branch.description.as_text(),
+                        "status": branch_status(branch, macros_by_name),
+                        "cases": [
+                            case_ref_json(case_ref, macros_by_name)
+                            for case_ref in branch.cases
+                        ],
+                    }
+                    for branch in category.branches
+                ],
+            }
+        )
 
     args_field = header.fields.get("Args")
     return {
         "unit": machine_value(field_value(header, "Unit") or ""),
-        "tier": tier,
+        "tier": machine_value(field_value(header, "Tier") or ""),
         "dependencies": [
             {"name": dependency.name, "type": dependency.kind}
             for dependency in document.dependencies
@@ -766,7 +747,7 @@ def summary_json(document: Document) -> dict[str, Any]:
     }
 
 
-def find_case(document: Document, case_name: str) -> tuple[CaseRef, CaseHead]:
+def find_case(document: Document, case_name: str) -> CaseRef:
     assert document.header is not None
     refs: list[CaseRef] = []
     for category in document.header.categories:
@@ -776,22 +757,21 @@ def find_case(document: Document, case_name: str) -> tuple[CaseRef, CaseHead]:
     case_ref = next((item for item in refs if item.name == case_name), None)
     if case_ref is None:
         raise ValueError(f"case '{case_name}' was not found")
-    case_head = next(
-        (
-            item
-            for item in document.case_heads
-            if machine_value(item.value("Case") or "") == case_name
-        ),
-        None,
-    )
-    if case_head is None:
-        raise ValueError(f"case '{case_name}' has no CASE block")
-    return case_ref, case_head
+    return case_ref
+
+
+def head_items(macro: Optional[TestMacro], field_name: str) -> Optional[list[str]]:
+    if macro is None or macro.head is None:
+        return None
+    parsed = macro.head.fields.get(field_name)
+    if parsed is None or not parsed.text.items:
+        return None
+    return parsed.text.items
 
 
 def case_json(document: Document, case_name: str) -> dict[str, Any]:
     assert document.header is not None
-    case_ref, case_head = find_case(document, case_name)
+    case_ref = find_case(document, case_name)
     branch = None
     if case_ref.branch_id is not None:
         for category in document.header.categories:
@@ -807,15 +787,19 @@ def case_json(document: Document, case_name: str) -> dict[str, Any]:
         (item for item in document.macros if item.case_name == case_name),
         None,
     )
-    detail = case_head.fields.get("Detail")
-    setup = case_head.fields.get("Setup")
+    if macro is not None:
+        detail = head_items(macro, "Detail")
+        setup = head_items(macro, "Setup")
+    else:
+        detail = case_ref.detail.items if case_ref.detail.items else None
+        setup = None
     return {
         "name": case_name,
         "category": case_ref.category,
         "branch": branch,
-        "status": machine_value(case_head.value("Status") or ""),
-        "detail": detail.text.items if detail and detail.text.items else None,
-        "setup": setup.text.items if setup and setup.text.items else None,
+        "status": "done" if macro is not None else "todo",
+        "detail": detail,
+        "setup": setup,
         "test": (
             {
                 "type": macro.kind,

@@ -28,26 +28,30 @@ produce a **test design**, not test bodies:
 
 - which **tier** the test should be (§Tier);
 - the dependencies and how each is replaced (`mock` or `inject` — see Concepts); solitary has none;
-- the cases to cover, grouped by **category** (Positive / Recovery / Negative) — and, for
-  sociable/integration, grouped under **branches** within each category.
+- the cases to cover, grouped by **category** (Positive / Recovery / Negative) — and, where
+  the case list calls for it (typical for sociable/integration), grouped under **branches**
+  within each category.
 
 Drive the design by branch coverage: walk the code under test and list its decision
 points (conditionals, early returns, error paths, boundaries, state transitions), then
 turn each into a branch/case so no reachable path is left uncovered.
 
-Write the result following `reference/header.md`: the HEADER block plus a CASE head
-(`@Case` + `@Status: todo`) for each planned case, and `* Case: (todo)` for slots whose
-case isn't named yet. At this stage there are no `TEST_F` bodies — the heads stand alone.
+Write the result following `reference/header.md`: the HEADER block with a `* Case:` entry
+per planned case (indented `- ` lines under an entry hold its design notes) and
+`* Case: (todo)` for slots whose case isn't named yet. At this stage there are no `TEST_F`
+bodies — the HEADER alone carries the design.
 
 ### `/ut impl [test-file]`
 
 `test-file` already contains a prepared HEADER. If no file is given, ask the user.
 
 1. Run `--op summary` to see which cases are `todo`.
-2. For each, run `--op case --case_name <name>` and read its `@Detail` and `@Setup`
+2. For each, run `--op case --case_name <name>` and read its detail and setup notes
    to learn what the case must do and how to set it up.
-3. Implement each case: add the `TEST_F` / `TEST_P` directly below its head and flip
-   the head's `@Status` from `todo` to `done`.
+3. Implement each case: write the `TEST_F` / `TEST_P` — a case turns `done` simply by
+   having its macro; there is no status field to flip. If the case has design notes in
+   the HEADER that are worth keeping, move them into a head (`@Detail` / `@Setup`)
+   directly above the macro; keeping them in the HEADER as well is an error.
 
 If a description is unclear, ask the user or find the answer in the production code.
 If you hit an unreasonable design, stop and raise it with the user instead of forcing it.
@@ -59,9 +63,7 @@ Bring an existing test (written before this skill) under the annotation system.
 
 1. Analyze the file and produce a report: which tier it is, and which
    categories / branches / cases it currently covers.
-2. Only after the user approves, write the HEADER and CASE annotation into the file.
-
-(Command name is provisional; `import` or `catalog` may be clearer.)
+2. Only after the user approves, write the HEADER and any case heads into the file.
 
 ### `/ut update [test-file]`
 
@@ -105,12 +107,11 @@ Each case belongs to a **category** — the kind of path it verifies.
 | Recovery | A recoverable fault is injected; the system self-heals and still succeeds. |
 | Negative | Invalid input is rejected with a definite error; no recovery. |
 
-Within a category, cases are organized differently by tier:
-
-- **Solitary**: **Category → Case**. No branches; cases hang directly off the category.
-- **Sociable / Integration**: **Category → Branch → Case**. A **branch** is a distinct
-  path through the code under that category, covered by one or more cases. Aim to
-  enumerate every meaningful branch — the coverage target is branches, not case count.
+Within a category, a **branch** groups cases that cover one distinct path through the
+code under that category. Branches are an optional grouping layer in every tier —
+**Category → Case** or **Category → Branch → Case**, the grammar is the same. Solitary
+tests usually hang cases directly off the category; for sociable/integration tests, aim
+to enumerate every meaningful branch — the coverage target is branches, not case count.
 
 The **case** is the concrete `TEST_F` (or `TEST_P` for a parameterized test).
 
@@ -123,18 +124,19 @@ When a test cannot use a real dependency, it replaces it one of two ways:
 
 ## Annotation Format
 
-The hierarchy is written into the test file as machine-readable comment blocks, so a
-script can extract what each file covers and CI can check it. Before writing or
-annotating a unit test, read `reference/header.md` and follow that format. In short:
+The hierarchy is written into the test file as machine-readable comments, so a script
+can extract what each file covers and CI can check it. Before writing or annotating a
+unit test, read `reference/header.md` and follow that format. In short:
 
-- **Solitary** is light: `Category → Case`, no `@Deps`, no branches. Each case gets a
-  light head — `@Case` + `@Status` (`@Setup` unused, `@Detail` optional).
-- **Sociable / Integration** is full: `Category → Branch → Case`, with `@Deps` and, for
-  the non-trivial cases, `@Setup` / `@Detail`.
-- Every case has a per-case CASE block (its "head") carrying `@Status` (`todo | done`),
-  so status is readable straight from the file. `@Detail` / `@Setup` are optional (skip
-  them for trivial cases). A `done` head sits above its `TEST_F`; a `todo` head can stand
-  alone until the case is implemented.
+- One grammar for all tiers: a HEADER block at the top of the file carries the
+  Category → [Branch →] Case tree plus `@Unit` / `@Tier` / `@Desc`, and `@Deps` when
+  the test replaces dependencies.
+- Status is derived, never written: a case with a `TEST_F` / `TEST_P` is `done`, a
+  HEADER case without one is `todo`.
+- Per-case notes are optional: a head is a run of `@Detail` / `@Setup` comment lines
+  directly above the macro — write one only when there is something worth saying.
+  Design notes for unimplemented cases live in the HEADER as indented `- ` lines under
+  the `* Case:` entry.
 
 ## Reading a Test File
 
@@ -146,15 +148,16 @@ implemented.
 python3 scripts/cli.py --file <test.cpp> --op summary
 ```
 
-Shows the file's tier, dependencies, and every category with its cases (for
-sociable/integration, grouped under branches), each with its completion
-(`done` / `todo`; a branch with both rolls up to `partial`).
+Shows the file's tier, dependencies, and every category with its cases (grouped under
+branches where used), each with its derived completion (`done` / `todo`; a branch with
+both rolls up to `partial`).
 
 ```sh
 python3 scripts/cli.py --file <test.cpp> --op case --case_name <name>
 ```
 
-Shows one case's category, branch (if any), status, detail, and the `TEST_F` it maps to.
+Shows one case's category, branch (if any), status, detail, setup, and the `TEST_F` it
+maps to; for a `todo` case, the design notes recorded in the HEADER.
 
 ```sh
 python3 scripts/cli.py --file <test.cpp> --op verify

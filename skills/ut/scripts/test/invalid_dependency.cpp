@@ -2,9 +2,9 @@
 
 // @UT-HEADER-BEGIN
 // @Unit: InvalidDependencyTest
-// @Tier: component
+// @Tier: sociable
 // @Deps: store(real)
-// @Desc: component fixture with an unsupported dependency type.
+// @Desc: sociable fixture with an unsupported dependency type.
 //
 // @Category-BEGIN: Positive
 //   * Branch BP1: read from the backing store.

@@ -30,9 +30,16 @@ class SemanticValidationTest(CliTestCase):
 
     def test_invalid_tier_is_rejected(self):
         text = self.replace_fixture(
-            "solitary.cpp", "// @Tier: solitary", "// @Tier: sociable"
+            "solitary.cpp", "// @Tier: solitary", "// @Tier: unit"
         )
-        self.assert_invalid(self.run_text(text), "invalid @Tier 'sociable'")
+        self.assert_invalid(self.run_text(text), "invalid @Tier 'unit'")
+
+    def test_tier_accepts_inline_comment(self):
+        text = self.replace_fixture(
+            "solitary.cpp", "// @Tier: solitary", "// @Tier: solitary // the tier"
+        )
+        result = self.run_text(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_description_is_rejected(self):
         text = self.replace_fixture(
@@ -88,36 +95,48 @@ class SemanticValidationTest(CliTestCase):
         )
         self.assert_invalid(self.run_text(text), "category 'Recovery' has no cases")
 
-    def test_solitary_branch_is_rejected(self):
+    def test_solitary_may_use_branches(self):
         text = self.replace_fixture(
             "solitary.cpp",
             "//   * Case: parses_valid_value",
-            "//   * Branch BP1: unnecessary branch.\n"
+            "//   * Branch BP1: parsing of individual values.\n"
             "//     * Case: parses_valid_value",
         )
-        self.assert_invalid(self.run_text(text), "solitary tests cannot contain branches")
+        result = self.run_text(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_solitary_dependencies_are_rejected(self):
+    def test_solitary_may_declare_dependencies(self):
         text = self.replace_fixture(
-            "solitary.cpp", "// @Tier: solitary", "// @Tier: solitary\n// @Deps: rpc(mock)"
+            "solitary.cpp", "// @Tier: solitary", "// @Tier: solitary\n// @Deps: clock(inject)"
         )
-        self.assert_invalid(self.run_text(text), "solitary tests must omit @Deps")
+        result = self.run_text(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_component_without_dependencies_is_rejected(self):
+    def test_sociable_may_omit_dependencies(self):
         text = self.replace_fixture(
-            "component.cpp", "// @Deps: store(mock), clock(inject)\n", ""
+            "sociable.cpp", "// @Deps: store(mock), clock(inject)\n", ""
         )
-        self.assert_invalid(self.run_text(text), "component tests require @Deps")
+        result = self.run_text(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_component_with_empty_dependencies_is_rejected(self):
+    def test_direct_cases_and_branches_may_mix(self):
         text = self.replace_fixture(
-            "component.cpp", "// @Deps: store(mock), clock(inject)", "// @Deps:"
+            "sociable.cpp",
+            "// @Category-END: Positive",
+            "//   * Case: handles_empty_cache\n// @Category-END: Positive",
+        )
+        result = self.run_text(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_empty_dependencies_are_rejected(self):
+        text = self.replace_fixture(
+            "sociable.cpp", "// @Deps: store(mock), clock(inject)", "// @Deps:"
         )
         self.assert_invalid(self.run_text(text), "@Deps must not be empty")
 
     def test_malformed_dependency_is_rejected(self):
         text = self.replace_fixture(
-            "component.cpp",
+            "sociable.cpp",
             "// @Deps: store(mock), clock(inject)",
             "// @Deps: store mock",
         )
@@ -125,7 +144,7 @@ class SemanticValidationTest(CliTestCase):
 
     def test_trailing_dependency_separator_is_rejected(self):
         text = self.replace_fixture(
-            "component.cpp",
+            "sociable.cpp",
             "// @Deps: store(mock), clock(inject)",
             "// @Deps: store(mock),",
         )
@@ -145,7 +164,7 @@ class SemanticValidationTest(CliTestCase):
             "//     * Case: (todo)\n"
         )
         text = self.replace_fixture(
-            "component.cpp", "// @Category-END: Positive", duplicate + "// @Category-END: Positive"
+            "sociable.cpp", "// @Category-END: Positive", duplicate + "// @Category-END: Positive"
         )
         self.assert_invalid(self.run_text(text), "duplicate branch id 'BP1'")
 
@@ -177,53 +196,16 @@ class SemanticValidationTest(CliTestCase):
         )
         self.assert_invalid(self.run_text(text), "duplicate HEADER case 'parses_valid_value'")
 
-    def test_case_block_missing_case_field_is_rejected(self):
-        text = self.replace_fixture(
-            "invalid_done_without_test.cpp", "// @Case: marked_done_without_body\n", ""
-        )
-        self.assert_invalid(self.run_text(text), "CASE block is missing '@Case'")
-
-    def test_empty_case_field_is_rejected(self):
-        text = self.replace_fixture(
-            "component.cpp", "// @Case: refreshes_expired_value", "// @Case:"
-        )
-        self.assert_invalid(self.run_text(text), "@Case must not be empty")
-
-    def test_case_block_missing_status_is_rejected(self):
-        text = self.replace_fixture("component.cpp", "// @Status: todo\n", "")
-        self.assert_invalid(self.run_text(text), "CASE block is missing '@Status'")
-
-    def test_empty_status_is_rejected(self):
-        text = self.replace_fixture("component.cpp", "// @Status: todo", "// @Status:")
-        self.assert_invalid(self.run_text(text), "@Status must not be empty")
-
-    def test_duplicate_case_block_is_rejected(self):
-        duplicate = (
-            "\n// @UT-CASE-BEGIN\n"
-            "// @Case: rejects_empty_value\n"
-            "// @Status: todo\n"
-            "// @UT-CASE-END\n"
-        )
-        text = self.fixture_text("solitary.cpp") + duplicate
-        self.assert_invalid(self.run_text(text), "duplicate CASE block for 'rejects_empty_value'")
-
-    def test_unregistered_case_block_is_rejected(self):
-        orphan = (
-            "\n// @UT-CASE-BEGIN\n"
-            "// @Case: orphan_case\n"
-            "// @Status: todo\n"
-            "// @UT-CASE-END\n"
-        )
-        text = self.fixture_text("solitary.cpp") + orphan
-        self.assert_invalid(self.run_text(text), "CASE 'orphan_case' is not registered in HEADER")
-
-    def test_solitary_setup_is_rejected(self):
+    def test_implemented_case_must_not_keep_detail_in_header(self):
         text = self.replace_fixture(
             "solitary.cpp",
-            "// @Status: todo",
-            "// @Status: todo\n// @Setup: no dependency is allowed.",
+            "TEST_F(ParserLogicTest, parses_valid_value)",
+            "TEST_F(ParserLogicTest, rejects_empty_value)",
         )
-        self.assert_invalid(self.run_text(text), "solitary CASE blocks must omit @Setup")
+        self.assert_invalid(
+            self.run_text(text),
+            "implemented case 'rejects_empty_value' must not keep detail in the HEADER",
+        )
 
     def test_include_after_header_is_rejected(self):
         text = self.replace_fixture(
