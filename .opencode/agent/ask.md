@@ -2,7 +2,7 @@
 name: Ask
 description: Answers questions using read-only research.
 mode: primary
-model: OpenAI/gpt-5.6-sol
+model: Kimi/kimi-k3
 variant: max
 color: success
 permission:

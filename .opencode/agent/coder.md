@@ -2,6 +2,7 @@
 name: Coder
 description: Understands architecture, writes design documents, and implements code.
 mode: all
+model: Kimi/kimi-k3
 color: "#A855F7"
 permission:
   bash: deny

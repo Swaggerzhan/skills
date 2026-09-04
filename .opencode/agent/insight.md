@@ -1,6 +1,7 @@
 ---
 description: Reads a project, explains it to the user, and writes documentation for it.
 mode: primary
+model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
   edit: allow

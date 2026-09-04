@@ -1,8 +1,7 @@
 ---
 description: General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.
 mode: subagent
-model: OpenAI/gpt-5.6-terra
-variant: xhigh
+model: Kimi/kimi-k3
 permission:
   bash:
     "git status *": allow

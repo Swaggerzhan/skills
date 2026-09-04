@@ -2,7 +2,7 @@
 name: Main
 description: Implements, verifies, and explains requested changes.
 mode: primary
-model: OpenAI/gpt-5.6-sol
+model: Kimi/kimi-k3
 variant: max
 color: info
 permission:

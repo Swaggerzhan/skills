@@ -2,6 +2,7 @@
 name: Scout
 description: Fast agent specialized for exploring codebases and the web. Use for finding files, searching code, looking up external information, and answering questions.
 mode: subagent
+model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
   edit: deny

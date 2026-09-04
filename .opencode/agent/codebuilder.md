@@ -2,8 +2,7 @@
 name: CodeBuilder
 description: Runs build, test, and code-generation commands (protoc, go build, go test, gofmt) for Go projects.
 mode: subagent
-model: OpenAI/gpt-5.6-terra
-variant: xhigh
+model: Kimi/kimi-k3
 color: "#A855F7"
 permission:
   edit: deny

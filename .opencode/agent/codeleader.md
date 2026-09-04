@@ -2,7 +2,7 @@
 name: CodeLeader
 description: Leads design and code implementation.
 mode: primary
-model: OpenAI/gpt-5.6-sol
+model: Kimi/kimi-k3
 variant: max
 color: "#A855F7"
 permission:
