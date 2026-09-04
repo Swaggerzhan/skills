@@ -242,12 +242,19 @@
     "dep_search": {
       "type": "local",
       "command": [
-        "/tools/bin/codebase-memory-mcp",
+        "codebase-memory-mcp",
         "--tool-profile=analysis"
       ]
     }
   },
 
   // Claude Code has no active formatter configuration to migrate.
-  "formatter": false
+  "formatter": false,
+  "experimental": {
+    "openTelemetry": true
+  },
+  "plugin": [
+    "opencode-plugin-langfuse"
+  ],
+
 }
