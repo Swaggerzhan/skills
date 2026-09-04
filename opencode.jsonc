@@ -232,9 +232,6 @@
     "plan": {
       "disable": true
     },
-    "explore": {
-      "disable": true
-    }
   },
 
   // No MCP server is active for the current project.
