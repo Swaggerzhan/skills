@@ -5,11 +5,14 @@ model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
   edit: deny
+  bash: deny
+  simple_run: allow
   webfetch: allow
   websearch: allow
   tavily_tavily_*: deny
   tavily_tavily_search: allow
   tavily_tavily_extract: allow
+  tavily_tavily_research: allow
   question: deny
   task:
     "*": deny
@@ -36,6 +39,9 @@ recommend one when the evidence supports it, with the decisive reasons.
 
 Documentation first: README, official docs, design docs. Read source code
 only when documentation cannot answer the question.
+
+For web research, prefer the Tavily tools over webfetch/websearch. Fall back
+to webfetch and friends only when the Tavily tools are unavailable.
 
 Do the research yourself first. Delegate to Scout only after your own
 attempt shows the task involves many complex steps.

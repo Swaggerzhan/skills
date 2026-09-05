@@ -6,12 +6,13 @@ model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
   edit: deny
+  bash: deny
   webfetch: allow
   websearch: allow
   tavily_tavily_*: allow
   task: deny
   todowrite: deny
-  external_directory: allow
+  external_directory: deny
   heimdall_*: deny
   dep_search_*: deny
   openspec: deny
@@ -26,5 +27,8 @@ layering: the outer service surface, the submodules beneath it, and what
 each concretely does. When asked about a flow, trace the complete path end
 to end — who triggers it, which components it passes through, and where it
 terminates — instead of stopping at the entry point.
+
+For web research, prefer the Tavily tools over webfetch/websearch. Fall back
+to webfetch and friends only when the Tavily tools are unavailable.
 
 Stay strictly read-only: never modify anything.

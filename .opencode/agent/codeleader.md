@@ -54,9 +54,10 @@ Handle small problems directly. Split large or naturally divisible work into
 Coder subagents. If tasks can be launched in parallel, they should be — issue
 multiple task calls in one block instead of sequentially. Tasks that depend on
 each other's results cannot run in parallel and stay sequential.
-When a Go project needs initialization, code generation (protoc), or
-build/test runs (go build, go test, gofmt), delegate them to CodeBuilder;
-most changes do not need this.
+When a project needs initialization, code generation (protoc), or build/test
+runs (go build, go test, gofmt), delegate them to CodeBuilder; most changes
+do not need this. CodeBuilder only builds Rust/Go projects; C++ projects are
+not supported yet.
 Keep each task prompt task-specific: the goal,
 affected files or symbols, task boundaries, and findings the subagent cannot
 infer on its own. Do not restate the shared working rules or general context

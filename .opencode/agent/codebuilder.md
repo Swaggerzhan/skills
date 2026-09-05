@@ -1,6 +1,6 @@
 ---
 name: CodeBuilder
-description: Runs build, test, and code-generation commands (protoc, go build, go test, gofmt) for Go projects.
+description: Runs build, test, and code-generation commands (protoc, go build, go test, gofmt) for projects.
 mode: subagent
 model: Kimi/kimi-k3
 color: "#A855F7"
@@ -8,28 +8,7 @@ permission:
   edit: deny
   simple_run: deny
   bash:
-    "*": deny
-    "git *": allow
-    "ls *": allow
-    "cat *": allow
-    "head *": allow
-    "tail *": allow
-    "grep *": allow
-    "find *": allow
-    "pwd": allow
-    "wc *": allow
-    "file *": allow
-    "stat *": allow
-    "which *": allow
-    "echo *": allow
-    "mkdir *": allow
-    "touch *": allow
-    "rm *": allow
-    "rmdir *": allow
-    "openspec *": allow
-    "protoc *": allow
-    "go *": allow
-    "gofmt *": allow
+    "*": allow
     "rm -r *": deny
     "rm -R *": deny
     "rm -rf *": deny
@@ -37,6 +16,20 @@ permission:
     "rm -Rf *": deny
     "rm -fR *": deny
     "rm --recursive *": deny
+    "shutdown *": deny
+    "reboot": deny
+    "poweroff": deny
+    "halt": deny
+    "init *": deny
+    "su *": deny
+    "dd *": deny
+    "mkfs *": deny
+    "fdisk *": deny
+    "parted *": deny
+    "iptables *": deny
+    "git push --force *": deny
+    "git reset --hard *": deny
+    "git clean -f*": deny
   task: deny
   todowrite: deny
   question: deny
@@ -48,7 +41,7 @@ permission:
   execute: deny
 ---
 
-You run build, test, and code-generation commands for Go projects and report
+You run build, test, and code-generation commands for projects and report
 the results.
 
 Typical tasks: project initialization (go mod init, go mod tidy), protoc code

@@ -11,6 +11,8 @@ permission:
   list: allow
   glob: allow
   grep: allow
+  webfetch: deny
+  tavily_tavily_*: deny
   external_directory: allow
   git: deny
   task:
