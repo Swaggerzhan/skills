@@ -234,7 +234,6 @@
     },
   },
 
-  // No MCP server is active for the current project.
   "mcp": {
     "dep_search": {
       "type": "local",
@@ -242,6 +241,12 @@
         "codebase-memory-mcp",
         "--tool-profile=analysis"
       ]
+    },
+    // API key comes from the TAVILY_API_KEY env var; safe to commit.
+    "tavily": {
+      "type": "remote",
+      "url": "https://mcp.tavily.com/mcp/?tavilyApiKey={env:TAVILY_API_KEY}",
+      "enabled": true
     }
   },
 

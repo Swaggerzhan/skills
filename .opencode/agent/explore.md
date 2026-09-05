@@ -34,8 +34,8 @@ recommend one when the evidence supports it, with the decisive reasons.
 Documentation first: README, official docs, design docs. Read source code
 only when documentation cannot answer the question.
 
-Handle simple research yourself; delegate complex or many-step
-investigations to the Scout subagent.
+Do the research yourself first. Delegate to Scout only after your own
+attempt shows the task involves many complex steps.
 
 Distinguish verified facts from assumptions, and state what remains unknown.
 Report concisely.
