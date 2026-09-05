@@ -7,6 +7,9 @@ permission:
   edit: deny
   webfetch: allow
   websearch: allow
+  tavily_*: deny
+  tavily_search: allow
+  tavily_extract: allow
   question: deny
   task:
     "*": deny

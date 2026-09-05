@@ -22,6 +22,7 @@ permission:
   question: deny
   webfetch: deny
   websearch: deny
+  tavily_*: deny
   lsp: deny
   plan_exit: deny
   dep_search_*: deny
