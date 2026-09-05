@@ -8,7 +8,7 @@ permission:
   edit: deny
   webfetch: allow
   websearch: allow
-  tavily_*: allow
+  tavily_tavily_*: allow
   task: deny
   todowrite: deny
   external_directory: allow

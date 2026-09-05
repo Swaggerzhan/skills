@@ -4,7 +4,7 @@
 # Clones (or updates) the repo into ~/.config/opencode-config, then links:
 #   opencode.jsonc      -> ~/.config/opencode/opencode.jsonc
 #   tui.jsonc           -> ~/.config/opencode/tui.jsonc
-#   .opencode/AGENTS.md  -> ~/.config/opencode/AGENTS.md
+#   AGENTS_.md          -> ~/.config/opencode/AGENTS.md
 #   .opencode/agent/    -> ~/.config/opencode/agent/
 #   .opencode/tool/     -> ~/.config/opencode/tool/
 #
@@ -62,6 +62,6 @@ log "linking tool directory"
 ln -sfn "$REPO_DIR/.opencode/tool" "$TARGET_DIR/tool"
 
 log "linking AGENTS.md"
-ln -sfn "$REPO_DIR/.opencode/AGENTS.md" "$TARGET_DIR/AGENTS.md"
+ln -sfn "$REPO_DIR/AGENTS_.md" "$TARGET_DIR/AGENTS.md"
 
 log "done. restart opencode for changes to take effect."
