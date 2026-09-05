@@ -4,21 +4,18 @@ mode: primary
 model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
-  edit: allow
-  bash: deny
-  simple_run: allow
+  "*": deny
   read: allow
-  list: allow
+  edit: allow
   glob: allow
   grep: allow
-  webfetch: deny
-  tavily_tavily_*: deny
-  external_directory: allow
-  git: deny
+  list: allow
+  simple_run: allow
   task:
     "*": deny
-    Scout: allow
-  dep_search_*: deny
+    "Scout": allow
+  external_directory: allow
+  doom_loop: ask
   dep_search_list_projects: allow
   dep_search_search_graph: allow
   dep_search_search_code: allow

@@ -4,31 +4,22 @@ mode: primary
 model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
-  edit: deny
-  bash: deny
+  "*": deny
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
   simple_run: allow
   webfetch: allow
   websearch: allow
-  tavily_tavily_*: deny
   tavily_tavily_search: allow
   tavily_tavily_extract: allow
   tavily_tavily_research: allow
-  question: deny
   task:
     "*": deny
     "Scout": allow
-  todowrite: deny
   external_directory: allow
-  skill:
-    build: deny
-    commit: deny
-    cpp-coding-style: deny
-    customize-opencode: deny
-    fix-review: deny
-    handoff: deny
-    insight: deny
-    skill-creator: deny
-    ut: deny
+  doom_loop: ask
 ---
 
 You are Explore, a research agent running in OpenCode. You investigate

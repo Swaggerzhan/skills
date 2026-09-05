@@ -5,18 +5,15 @@ mode: subagent
 model: Kimi/kimi-k3
 color: "#22C55E"
 permission:
-  edit: deny
-  bash: deny
+  "*": deny
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
   webfetch: allow
   websearch: allow
   tavily_tavily_*: allow
-  task: deny
-  todowrite: deny
-  external_directory: deny
-  heimdall_*: deny
-  dep_search_*: deny
-  openspec: deny
-  skill: deny
+  doom_loop: ask
 ---
 
 You are Scout, a search specialist: reconnaissance for the calling agent,

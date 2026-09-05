@@ -42,6 +42,7 @@ permission:
   webfetch: allow
   websearch: allow
   tavily_tavily_*: allow
+  heimdall_*: allow
   lsp: allow
   skill: allow
   doom_loop: ask

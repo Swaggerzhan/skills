@@ -6,33 +6,31 @@ model: Kimi/kimi-k3
 variant: max
 color: "#A855F7"
 permission:
-  bash: deny
-  grep: allow
-  simple_run: allow
+  "*": deny
   read:
+    "*": allow
     "build/**": deny
     "*.pb.*": deny
   edit:
+    "*": allow
     "build/**": deny
+  glob: allow
+  grep: allow
+  list: allow
+  simple_run: allow
   task:
     "*": deny
     "Coder": allow
     "CodeBuilder": allow
-  todowrite: deny
-  question: deny
-  webfetch: deny
-  websearch: deny
-  tavily_tavily_*: deny
-  lsp: deny
-  plan_exit: deny
-  dep_search_*: deny
+  external_directory: allow
+  skill: allow
+  doom_loop: ask
   dep_search_list_projects: allow
   dep_search_search_graph: allow
   dep_search_search_code: allow
   dep_search_get_code_snippet: allow
   dep_search_trace_path: allow
   dep_search_check_index_coverage: allow
-  execute: deny
 ---
 
 You are a focused agent running in OpenCode, dedicated to leading design
