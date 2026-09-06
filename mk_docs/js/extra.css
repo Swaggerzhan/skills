@@ -1,0 +1,2 @@
+.md-grid, .md-main__inner { max-width: 95rem; }
+.md-typeset table:not([class]) { display: table; width: 100%; }
