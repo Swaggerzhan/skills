@@ -6,6 +6,7 @@ color: "#22C55E"
 permission:
   "*": deny
   read: allow
+  edit: allow
   glob: allow
   grep: allow
   list: allow
@@ -18,7 +19,7 @@ permission:
   task:
     "*": deny
     "Scout": allow
-  external_directory: allow
+  external_directory: deny
   doom_loop: ask
 ---
 
