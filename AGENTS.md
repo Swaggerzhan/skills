@@ -9,6 +9,8 @@ Edit the source files in this repository instead:
 - opencode configuration and agent/command/tool Markdown: `.opencode/`
 - general Skills: `skills/`
 - deployable `AGENTS.md` content: `AGENTS_.md`
+- pi-agent configuration directory: `pi-agent/` (may eventually hold substantial
+  development content; currently research only)
 
 `AGENTS_.md` uses a trailing underscore so AI agents maintaining this
 repository do not load it as project guidance. It is the source file that

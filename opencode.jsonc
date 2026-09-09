@@ -232,6 +232,9 @@
     "plan": {
       "disable": true
     },
+    "explore": {
+      "disable": true
+    },
   },
 
   "mcp": {
