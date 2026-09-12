@@ -4,6 +4,8 @@ description: Understands architecture, writes design documents, and implements c
 mode: all
 model: Kimi/kimi-k3
 color: "#A855F7"
+tools:
+  grep: false
 permission:
   "*": deny
   read:

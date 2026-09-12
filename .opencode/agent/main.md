@@ -5,6 +5,8 @@ mode: primary
 model: Kimi/kimi-k3
 variant: max
 color: info
+tools:
+  grep: false
 permission:
   read: allow
   edit: allow

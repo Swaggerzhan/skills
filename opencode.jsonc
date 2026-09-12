@@ -178,6 +178,7 @@
     "edit": "allow",
     "glob": "allow",
     "grep": "allow",
+    "agrep": "allow",
     "list": "allow",
     "git": "deny",
     "openspec": "deny",
