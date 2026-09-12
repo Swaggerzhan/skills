@@ -18,6 +18,9 @@ agrep = opencode 内置 grep 的克隆 + 第 4 个必填参数 `intent`（自由
 | `OPENCODE_AGREP_MYSQL_PASSWORD` | 密码 | |
 | `OPENCODE_AGREP_MYSQL_DATABASE_NAME` | 库名 | **库须预先存在，工具不建库** |
 
+另有一个可选开关：`OPENCODE_AGREP_NO_FILTER`（非空且非 `0`/`false` 即生效）——
+关闭内置的 protobuf 生成代码过滤（§6），默认开启。
+
 缺库先建：
 
 ```sql
@@ -84,13 +87,14 @@ SELECT * FROM agrep_records ORDER BY seq DESC LIMIT 1;
 - 搜索行为与 grep 一致：同样的 rg 调用
   （`rg --no-config --json --hidden --no-messages [--glob=include] --glob=!**/.git/** -- <pattern> .`）、
   100 条上限、单行 2000 字符截断、相同的输出排版。两个出口处与 grep 不同：
-  记录逻辑不改变搜索内容本身；输出末尾可能追加 dep_search 提示（§6）。
+  记录逻辑不改变搜索内容本身；搜索内置排除 protobuf 生成代码，且输出末尾可能
+  追加 Reminder 提示块（§6）。
 
 ## 3. 存储选型：MySQL
 
 结论：**好整**。自定义工具可以 import npm 包（官方示例即 import
 `@opencode-ai/plugin`），`mysql2` 是纯 JS 驱动、无原生绑定，预期在 opencode
-运行时可用（实现时验证，见 §7）。
+运行时可用（实现时验证，见 §8）。
 
 相比 JSONL，MySQL 换来的东西：多 session/多机器集中写入、SQL 直接做 intent
 分布统计与会话回放、不用自己管 rotation。代价是引入一个网络依赖：DB 不可用时
@@ -193,16 +197,36 @@ SELECT * FROM agrep_inject_records ORDER BY inject_count DESC;
 - **并发**：多个 opencode 进程同时插入由 InnoDB auto_increment 天然保证安全，
   无需客户端锁。
 
-## 6. dep_search 提示注入
+## 6. 输出注入（Reminder 块）
 
-代码文件搜索时，若搜索目录落在某个已索引项目内，在输出末尾追加一条带标题的
-短提示（随 output 一起写入 MySQL `output_text`），引导模型改用 dep_search：
+两种提示按序拼成一个块追加在 rg 输出之后；**都不触发则整块不加**：
 
 ```
----
-[dep_search] This code is indexed (project "brpc"). For faster structural code
-search, use the dep_search_* tools with project "brpc".
+<正常 rg 输出>
+
+Reminder:
+[proto_gen_filter]: generated files like "addressbook.pb.h" are filtered out; you should not read generated code — the .proto definition is enough.
+[dep_search]: this code is indexed. For faster structural code search, use the dep_search_* tools with project "brpc".
 ```
+
+### 6.1 protobuf 生成代码过滤（内置，LLM 不可控）
+
+- **排除清单**（收紧到 c/cpp/py/rust/go/js/ts）：rg 调用无条件追加排除 glob
+  （与硬编码 `!**/.git/**` 同级，include 白名单先生效、黑名单后生效）：
+  - C/C++：`*.pb.h` `*.pb.cc` `*.grpc.pb.h` `*.grpc.pb.cc` `*.pb.validate.{h,cc}`
+  - Python：`*_pb2.py` `*_pb2.pyi` `*_pb2_grpc.py`
+  - Rust：`*.pb.rs`（约定俗成；prost 本身无文件名标记）
+  - Go：`*.pb.go` `*_grpc.pb.go` `*.pb.gw.go` `*.pb.validate.go`
+  - JS/TS：`*_pb.js` `*_pb.d.ts` `*_grpc_pb.js` `*_grpc_pb.d.ts`
+  - 这些都是双后缀（真实扩展名仍是 `.h`/`.go`），`*.h` 这类 include 照样会
+    命中它们——不过滤必然爆上下文。Java/C#/ts-proto 无文件名标记，不做。
+- **开关**：默认开启；`OPENCODE_AGREP_NO_FILTER=1` 彻底关闭（排除与提示都关）。
+- **提示触发**：仅当与本次 include 后缀相关的生成文件**真实存在**于搜索树下
+  才注入（`rg --files` 存在性探测，纯文件名扫描、5s 超时、拿到首行即 kill，
+  探测失败静默不加）。提示中引用探测到的真实文件名，措辞直述"不该读生成
+  代码，读 .proto 就够"。
+
+### 6.2 dep_search 提示
 
 - **触发条件**：`include` glob 提取出的后缀（支持一层 brace 展开，
   `*.{h,cc}` → h/cc；无后缀文件名如 `Makefile` 不触发）与内置代码后缀表
@@ -226,7 +250,17 @@ search, use the dep_search_* tools with project "brpc".
   `level=WARN service=agrep` 日志，不注入，搜索与记录不受影响。无匹配项目
   属正常情况，静默跳过。
 
-## 7. 实现时验证清单
+## 7. 单测
+
+- `tool/` 目录下每个 `.ts` 都会被 opencode 注册为工具，**测试文件不能放进
+  `tool/`**；测试放仓库 `tests/` 下，`bun test` 直接跑 TS。
+- 纯函数（`extractExts`、`activeGenPatterns`、`resolveSearchRoot` 等）以
+  named export 导出供测试 import；测试 setup 把 `XDG_DATA_HOME` 指向临时目录，
+  避免模块加载的 DB init 把 WARN 写进真实 opencode.log。
+- `search()` 可对 fixture 目录做真 rg 集成测试；MySQL / codebase-memory-mcp
+  CLI 路径不做单测，走部署后实测（§8 清单）。
+
+## 8. 实现时验证清单
 
 1. ~~`mysql2` 在 opencode 运行时（Bun）内可 import~~ → 已改为调用时动态
    `import()`：包缺失不会拖垮工具注册（2026-09-12 事故：`Cannot find module

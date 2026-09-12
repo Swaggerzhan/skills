@@ -78,8 +78,19 @@ export default tool({
     }
 
     const result = await search(pattern!, include!, resolveSearchRoot(args.path, context.directory))
-    const hint = await depSearchHint(result.searchRoot, include!, context.sessionID)
-    const output = result.output + (hint ?? "")
+    const reminders: string[] = []
+    if (!filterDisabled()) {
+      const filtered = await probeFilteredFile(result.searchRoot, activeGenPatterns(include!))
+      if (filtered) {
+        reminders.push(
+          `[proto_gen_filter]: generated files like "${filtered}" are filtered out; ` +
+            `you should not read generated code — the .proto definition is enough.`,
+        )
+      }
+    }
+    const dsHint = await depSearchHint(result.searchRoot, include!, context.sessionID)
+    if (dsHint) reminders.push(dsHint)
+    const output = result.output + (reminders.length ? `\n\nReminder:\n${reminders.join("\n")}\n` : "")
     await record({
       sessionId: context.sessionID,
       agent: context.agent,
@@ -258,6 +269,69 @@ async function record(row: {
   }
 }
 
+// ---------- generated-protobuf-file filter (built-in, not LLM-controlled) ----------
+
+// Double-suffix patterns: the real extension stays .h/.go/..., so an LLM-written
+// "*.h" include would still pull in "*.pb.h" and blow up context. Unconditionally
+// appended as rg exclusion globs (same level as the hardcoded !**/.git/**) unless
+// OPENCODE_AGREP_NO_FILTER is set. Scoped to c/cpp/py/rust/go/js/ts generators.
+export const GEN_FILE_PATTERNS = [
+  // C/C++
+  "*.pb.h", "*.pb.cc", "*.grpc.pb.h", "*.grpc.pb.cc", "*.pb.validate.h", "*.pb.validate.cc",
+  // Python
+  "*_pb2.py", "*_pb2.pyi", "*_pb2_grpc.py",
+  // Rust (convention; prost itself has no filename marker)
+  "*.pb.rs",
+  // Go
+  "*.pb.go", "*_grpc.pb.go", "*.pb.gw.go", "*.pb.validate.go",
+  // JS/TS
+  "*_pb.js", "*_pb.d.ts", "*_grpc_pb.js", "*_grpc_pb.d.ts",
+]
+
+const FILTER_PROBE_TIMEOUT_MS = 5_000
+
+export function filterDisabled(): boolean {
+  const v = process.env.OPENCODE_AGREP_NO_FILTER?.trim().toLowerCase()
+  return !!v && v !== "0" && v !== "false"
+}
+
+// The filter applies unconditionally, but the notice only fires when generated
+// files relevant to this include actually exist under the search root.
+export function activeGenPatterns(include: string): string[] {
+  const exts = new Set(extractExts(include))
+  if (!exts.size) return []
+  return GEN_FILE_PATTERNS.filter((p) => exts.has(p.slice(p.lastIndexOf(".") + 1).toLowerCase()))
+}
+
+// Fast existence probe: rg --files is a filename-only scan, no content pass.
+async function probeFilteredFile(searchRoot: string, patterns: string[]): Promise<string | null> {
+  if (!patterns.length) return null
+  return new Promise((resolve) => {
+    const args = ["--no-config", "--hidden", "--no-messages"]
+    for (const p of patterns) args.push(`--glob=${p}`)
+    args.push("--files")
+    const proc = spawn("rg", args, { cwd: searchRoot, stdio: ["ignore", "pipe", "ignore"] })
+    let buf = ""
+    let done = false
+    const finish = (v: string | null) => {
+      if (!done) {
+        done = true
+        clearTimeout(timer)
+        proc.kill("SIGTERM")
+        resolve(v)
+      }
+    }
+    const timer = setTimeout(() => finish(null), FILTER_PROBE_TIMEOUT_MS)
+    proc.stdout.on("data", (c: Buffer) => {
+      buf += c.toString("utf8")
+      const nl = buf.indexOf("\n")
+      if (nl >= 0) finish(buf.slice(0, nl).trim() || null)
+    })
+    proc.on("error", () => finish(null))
+    proc.on("close", () => finish(buf.trim().split("\n")[0]?.trim() || null))
+  })
+}
+
 // ---------- dep_search hint injection ----------
 
 // Common code-file suffixes. When `include` restricts the search to any of
@@ -388,10 +462,9 @@ async function depSearchHint(searchRoot: string, include: string, sessionId: str
     const pool = await db()
     if (!pool) return null // budget lives in MySQL; recording disabled => injection disabled
     const hint =
-      `\n---\n` +
-      `[dep_search] This code is indexed (project "${best.name}"). ` +
+      `[dep_search]: this code is indexed. ` +
       `For faster structural code search, use the dep_search_* tools with project "${best.name}".`
-    if (!(await dsInjectAllowed(pool, sessionId, best.name, hint.trim()))) return null
+    if (!(await dsInjectAllowed(pool, sessionId, best.name, hint))) return null
     return hint
   } catch (err) {
     logWarn(`dep_search hint failed: ${String(err)}`)
@@ -412,6 +485,9 @@ function truncateLine(content: string, maxLength = 2000): string {
 async function search(pattern: string, include: string, searchPath: string) {
   const args = ["--no-config", "--json", "--hidden", "--no-messages"]
   args.push(`--glob=${include}`)
+  if (!filterDisabled()) {
+    for (const p of GEN_FILE_PATTERNS) args.push(`--glob=!${p}`)
+  }
   args.push("--glob=!**/.git/**")
   args.push("--")
   args.push(pattern)
