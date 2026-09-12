@@ -4,6 +4,7 @@ mode: subagent
 model: Kimi/kimi-k3
 permission:
   grep: deny
+  agrep: allow
   bash:
     "git status *": allow
     "git diff *": allow

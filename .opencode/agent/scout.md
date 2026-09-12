@@ -9,6 +9,7 @@ permission:
   read: allow
   glob: allow
   grep: deny
+  agrep: allow
   list: allow
   webfetch: allow
   websearch: allow

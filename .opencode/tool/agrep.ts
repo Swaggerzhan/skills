@@ -14,7 +14,11 @@ import fs from "node:fs"
 import path from "node:path"
 import { StringDecoder } from "node:string_decoder"
 import { tool } from "@opencode-ai/plugin"
-import mysql from "mysql2/promise"
+// mysql2 is imported lazily inside db(): tool files deploy via git/symlink while
+// node_modules does not, so a top-level import of an uninstalled package would
+// crash the whole tool registry at load time and break every session. A lazy
+// import confines the failure to agrep calls, which fail loudly by design.
+import type mysql from "mysql2/promise"
 
 const LIMIT = 100
 const MAX_LINE = 2000
@@ -56,7 +60,8 @@ function db() {
   if (!ready) {
     ready = (async () => {
       const cfg = getConfig()
-      const pool = mysql.createPool({
+      const mysql = await import("mysql2/promise")
+      const pool = mysql.default.createPool({
         host: cfg.host,
         port: cfg.port,
         user: cfg.user,

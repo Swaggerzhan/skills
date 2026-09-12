@@ -16,6 +16,7 @@ permission:
     "build/**": deny
   glob: allow
   grep: deny
+  agrep: allow
   list: allow
   simple_run: allow
   task:

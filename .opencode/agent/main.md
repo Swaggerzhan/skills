@@ -10,6 +10,7 @@ permission:
   edit: allow
   glob: allow
   grep: deny
+  agrep: allow
   list: allow
   openspec: deny
   simple_run: deny
