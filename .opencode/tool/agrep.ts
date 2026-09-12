@@ -78,6 +78,8 @@ export default tool({
     }
 
     const result = await search(pattern!, include!, resolveSearchRoot(args.path, context.directory))
+    const hint = await depSearchHint(result.searchRoot, include!, context.sessionID)
+    const output = result.output + (hint ?? "")
     await record({
       sessionId: context.sessionID,
       agent: context.agent,
@@ -88,28 +90,33 @@ export default tool({
       intent: intentText!,
       matches: result.matches,
       truncated: result.truncated ? 1 : 0,
-      output: result.output,
+      output,
       error: null,
     })
     return {
       title: pattern!,
       metadata: { matches: result.matches, truncated: result.truncated },
-      output: result.output,
+      output,
     }
   },
 })
 
 // ---------- record store (MySQL) ----------
 
-type Config = { host: string; port: number; user: string; password: string; database: string; table: string }
+type Config = { host: string; port: number; user: string; password: string; database: string }
 
 const REQUIRED_ENV = [
   "OPENCODE_AGREP_MYSQL_ENDPOINT",
   "OPENCODE_AGREP_MYSQL_USERNAME",
   "OPENCODE_AGREP_MYSQL_PASSWORD",
   "OPENCODE_AGREP_MYSQL_DATABASE_NAME",
-  "OPENCODE_AGREP_MYSQL_TABLE_NAME",
 ] as const
+
+// Table names are fixed: they auto-create (CREATE TABLE IF NOT EXISTS), so a
+// configurable name buys nothing and a missing/wrong value used to silently
+// disable recording when it was still required env.
+const MAIN_TABLE = "agrep_records"
+const INJECT_TABLE = "agrep_inject_records"
 
 type EnvMap = Partial<Record<(typeof REQUIRED_ENV)[number], string>>
 
@@ -152,12 +159,11 @@ function getConfig(): Config | null {
     user: env.OPENCODE_AGREP_MYSQL_USERNAME!,
     password: env.OPENCODE_AGREP_MYSQL_PASSWORD!,
     database: env.OPENCODE_AGREP_MYSQL_DATABASE_NAME!,
-    table: env.OPENCODE_AGREP_MYSQL_TABLE_NAME!,
   }
   return cached
 }
 
-let ready: Promise<{ pool: mysql.Pool; table: string } | null> | undefined
+let ready: Promise<mysql.Pool | null> | undefined
 
 function db() {
   if (!ready) {
@@ -176,7 +182,7 @@ function db() {
           waitForConnections: true,
           connectionLimit: 4,
         })
-        await pool.query(`CREATE TABLE IF NOT EXISTS \`${cfg.table}\` (
+        await pool.query(`CREATE TABLE IF NOT EXISTS \`${MAIN_TABLE}\` (
   session_id  VARCHAR(64)    NOT NULL,
   seq         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   created_at  DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -193,7 +199,14 @@ function db() {
   PRIMARY KEY (session_id, seq),
   KEY idx_seq (seq)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`)
-        return { pool, table: cfg.table }
+        await pool.query(`CREATE TABLE IF NOT EXISTS \`${INJECT_TABLE}\` (
+  session_id     VARCHAR(64)  NOT NULL,
+  project_name   VARCHAR(255) NOT NULL,
+  inject_count   INT UNSIGNED NOT NULL DEFAULT 0,
+  inject_content TEXT         NULL,
+  PRIMARY KEY (session_id, project_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`)
+        return pool
       } catch (err) {
         logWarn(`recording disabled: MySQL init failed: ${String(err)}`)
         return null
@@ -220,11 +233,11 @@ async function record(row: {
   output: string | null
   error: string | null
 }) {
-  const conn = await db()
-  if (!conn) return
+  const pool = await db()
+  if (!pool) return
   try {
-    await conn.pool.query(
-      `INSERT INTO \`${conn.table}\` (session_id, agent, directory, pattern, path, include, intent, matches, truncated, output_text, error)
+    await pool.query(
+      `INSERT INTO \`${MAIN_TABLE}\` (session_id, agent, directory, pattern, path, include, intent, matches, truncated, output_text, error)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.sessionId,
@@ -242,6 +255,147 @@ async function record(row: {
     )
   } catch (err) {
     logWarn(`record failed: ${String(err)}`)
+  }
+}
+
+// ---------- dep_search hint injection ----------
+
+// Common code-file suffixes. When `include` restricts the search to any of
+// these, the searched tree may be an indexed codebase, so we check dep_search
+// and tell the model (a few tokens appended to the output).
+const CODE_EXTS = new Set([
+  "c", "h", "cc", "cpp", "cxx", "hh", "hpp", "hxx", "cu", "cuh", "m", "mm",
+  "go", "rs", "zig", "nim", "d", "v", "sv",
+  "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "vue", "svelte",
+  "py", "rb", "php", "lua", "pl", "pm", "r", "jl", "ex", "exs", "erl", "hrl",
+  "java", "kt", "kts", "scala", "groovy", "cs", "fs", "vb", "swift", "dart",
+  "hs", "ml", "mli", "clj", "cljs", "elm", "sh", "bash", "zsh", "sql", "proto",
+])
+
+// Extract candidate suffixes from an rg glob: expands one level of brace
+// alternation (`*.{h,cc}` -> `*.h`, `*.cc`) and takes the trailing `.ext` of
+// each branch's basename. Returns [] for extension-less globs ("Makefile").
+function extractExts(glob: string): string[] {
+  const branches: string[] = []
+  const brace = /\{([^{}]*)\}/.exec(glob)
+  if (brace) {
+    for (const alt of brace[1].split(",")) {
+      branches.push(glob.slice(0, brace.index) + alt + glob.slice(brace.index + brace[0].length))
+    }
+  } else {
+    branches.push(glob)
+  }
+  const exts: string[] = []
+  for (const b of branches) {
+    const base = b.slice(b.lastIndexOf("/") + 1)
+    const m = /\.([A-Za-z0-9]+)$/.exec(base)
+    if (m) exts.push(m[1].toLowerCase())
+  }
+  return exts
+}
+
+type DsProject = { name: string; root: string }
+
+let dsCache: { at: number; projects: DsProject[] } | undefined
+const DS_CACHE_TTL_MS = 60_000
+const DS_CLI_TIMEOUT_MS = 10_000 // tolerate cold daemon start; cached afterwards
+
+function runDsCli(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("codebase-memory-mcp", ["cli", "list_projects", "--limit", "100"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let out = ""
+    let err = ""
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM")
+      reject(new Error(`codebase-memory-mcp cli timed out after ${DS_CLI_TIMEOUT_MS}ms`))
+    }, DS_CLI_TIMEOUT_MS)
+    proc.stdout.on("data", (c: Buffer) => (out += c.toString("utf8")))
+    proc.stderr.on("data", (c: Buffer) => (err += c.toString("utf8")))
+    proc.on("error", (e) => {
+      clearTimeout(timer)
+      reject(e)
+    })
+    proc.on("close", (code) => {
+      clearTimeout(timer)
+      if (code === 0) resolve(out)
+      else reject(new Error(`codebase-memory-mcp cli exited ${code}: ${err.trim().slice(0, 300)}`))
+    })
+  })
+}
+
+// Default CLI output is the unwrapped payload JSON (cli_print_mcp_result
+// extracts content[0].text): {"projects":[{"name","root_path"},...], ...}.
+// Errors go to stderr with a nonzero exit (rejected by runDsCli above).
+async function dsProjects(): Promise<DsProject[]> {
+  if (dsCache && Date.now() - dsCache.at < DS_CACHE_TTL_MS) return dsCache.projects
+  const stdout = await runDsCli()
+  const list = JSON.parse(stdout)?.projects
+  if (!Array.isArray(list)) throw new Error("cli output has no projects array")
+  const projects = list
+    .filter((p: unknown): p is { name: string; root_path: string } =>
+      typeof (p as any)?.name === "string" && typeof (p as any)?.root_path === "string")
+    .map((p) => ({ name: p.name, root: p.root_path.replace(/\/+$/, "") }))
+  dsCache = { at: Date.now(), projects }
+  return projects
+}
+
+// Per-session injection budget, persisted in MySQL (survives restarts and is
+// consistent across machines sharing the DB). Atomically claims a slot: the
+// conditional UPDATE takes a row lock, so concurrent calls cannot overshoot.
+const DS_INJECT_LIMIT = 3
+
+async function dsInjectAllowed(
+  pool: mysql.Pool,
+  sessionId: string,
+  project: string,
+  content: string,
+): Promise<boolean> {
+  const [updated]: any = await pool.query(
+    `UPDATE \`${INJECT_TABLE}\` SET inject_count = inject_count + 1, inject_content = ?
+     WHERE session_id = ? AND project_name = ? AND inject_count < ?`,
+    [content, sessionId, project, DS_INJECT_LIMIT],
+  )
+  if (updated.affectedRows > 0) return true
+  try {
+    await pool.query(
+      `INSERT INTO \`${INJECT_TABLE}\` (session_id, project_name, inject_count, inject_content) VALUES (?, ?, 1, ?)`,
+      [sessionId, project, content],
+    )
+    return true
+  } catch (err: any) {
+    if (err?.code === "ER_DUP_ENTRY") return false // row exists and is at the limit
+    throw err
+  }
+}
+
+// Returns the hint line to append, or null (not a code search / no matching
+// project / session budget exhausted / any failure — failures log WARN and
+// inject nothing).
+async function depSearchHint(searchRoot: string, include: string, sessionId: string): Promise<string | null> {
+  if (!extractExts(include).some((e) => CODE_EXTS.has(e))) return null
+  try {
+    const projects = await dsProjects()
+    const root = searchRoot.replace(/\/+$/, "")
+    let best: DsProject | null = null
+    for (const p of projects) {
+      if ((root === p.root || root.startsWith(p.root + "/")) && (!best || p.root.length > best.root.length)) {
+        best = p
+      }
+    }
+    if (!best) return null
+    const pool = await db()
+    if (!pool) return null // budget lives in MySQL; recording disabled => injection disabled
+    const hint =
+      `\n---\n` +
+      `[dep_search] This code is indexed (project "${best.name}"). ` +
+      `For faster structural code search, use the dep_search_* tools with project "${best.name}".`
+    if (!(await dsInjectAllowed(pool, sessionId, best.name, hint.trim()))) return null
+    return hint
+  } catch (err) {
+    logWarn(`dep_search hint failed: ${String(err)}`)
+    return null
   }
 }
 

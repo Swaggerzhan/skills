@@ -49,11 +49,33 @@ Record the traps a newcomer would hit: hidden coupling, surprising
 ownership. Check README and comment claims against the implementation;
 note discrepancies.
 
+## Terms
+
+Open the document with a **Terms** section, one line per term — but only for
+names this project coined or repurposed: its own components, libraries,
+internal mechanisms, and acronyms a reader cannot resolve outside this repo
+(e.g. Mooncake's `EP`, `PG`, `tent`). A term qualifies only if it shows up in
+your views and the main line is unreadable without it.
+
+Never gloss industry terms — Raft, RDMA, TCP, CRDT, C++ — however obscure;
+the reader can look those up. Test: "searching this term alone lands on the
+right meaning" → leave it out. When in doubt, leave it out.
+
+Ground every entry in the repo: expansion and role come from code, manifests,
+or docs you actually read. Never guess an acronym's expansion; if the repo
+never expands it, give the role only. Omit the section entirely when nothing
+qualifies.
+
 ## Compose
 
-Skeleton, in order: one-line conclusion → main view → short interpretation
-hugging the view → references (`Class::method` + file) → uncertainty flags if
-any. At most one supplementary view, only when another angle is needed.
+Skeleton, in order: Terms (only if any qualify) → main view → short
+interpretation hugging the view → references (`Class::method` + file) →
+uncertainty flags if any. At most one supplementary view, only when another angle is needed.
+
+For wide questions with several sections: structure before behavior —
+architecture, nodes, and data structures first, then the flows over them;
+within architecture, global before local. Simple subjects don't need this
+rigor — adapt the order to the question.
 
 Keep only details that serve the question: who executes, who owns state, where
 boundaries are crossed, where it waits. When the flow leans on a well-known
