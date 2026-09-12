@@ -4,13 +4,11 @@ description: Fast agent specialized for exploring codebases and the web. Use for
 mode: subagent
 model: Kimi/kimi-k3
 color: "#22C55E"
-tools:
-  grep: false
 permission:
   "*": deny
   read: allow
   glob: allow
-  grep: allow
+  grep: deny
   list: allow
   webfetch: allow
   websearch: allow

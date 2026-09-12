@@ -5,8 +5,6 @@ mode: primary
 model: Kimi/kimi-k3
 variant: max
 color: "#A855F7"
-tools:
-  grep: false
 permission:
   "*": deny
   read:
@@ -17,7 +15,7 @@ permission:
     "*": allow
     "build/**": deny
   glob: allow
-  grep: allow
+  grep: deny
   list: allow
   simple_run: allow
   task:

@@ -3,14 +3,12 @@ description: Researches projects, tools, and features across the web and local c
 mode: primary
 model: Kimi/kimi-k3
 color: "#22C55E"
-tools:
-  grep: false
 permission:
   "*": deny
   read: allow
   edit: allow
   glob: allow
-  grep: allow
+  grep: deny
   list: allow
   simple_run: allow
   webfetch: allow

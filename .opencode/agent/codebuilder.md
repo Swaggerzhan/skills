@@ -4,13 +4,11 @@ description: Runs build, test, and code-generation commands (protoc, go build, g
 mode: subagent
 model: Kimi/kimi-k3
 color: "#A855F7"
-tools:
-  grep: false
 permission:
   "*": deny
   read: allow
   glob: allow
-  grep: allow
+  grep: deny
   list: allow
   bash:
     "*": allow
