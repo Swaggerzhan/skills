@@ -19,7 +19,7 @@ import type mysql from "mysql2/promise"
 const DESCRIPTION = `- Fast content search tool that works with any codebase size
 - Searches file contents using regular expressions
 - Supports full regex syntax (eg. "log.*Error", "function\\s+\\w+", etc.)
-- The \`include\` parameter is REQUIRED: a glob that restricts which files are searched (e.g. "*.cc", "*.{h,hpp,cpp,cc}"); use "*" to search all files
+- The \`include\` parameter is REQUIRED: a glob that restricts which files are searched (e.g. "*.cc", "*.{h,hpp,cpp,cc}", or a file name like "Makefile"); a bare "*" is not allowed
 - Returns file paths and line numbers with matching lines
 - Use this tool when you need to find files containing specific patterns
 - If you need to identify/count the number of matches within files, use the Bash tool with \`rg\` (ripgrep) directly
@@ -43,16 +43,21 @@ export default tool({
       .optional(),
     include: tool.schema
       .string()
-      .describe('The glob pattern to match files against (REQUIRED: e.g. "*.cc", "*.{h,hpp,cpp,cc}"; use "*" to search all files)'),
+      .describe('The glob pattern to match files against (REQUIRED: e.g. "*.cc", "*.{h,hpp,cpp,cc}", or a file name like "Makefile"; a bare "*" is not allowed)'),
   },
   async execute(args, context) {
     const pattern = args.pattern?.trim()
     const intentText = args.intent?.trim()
     const include = args.include?.trim()
+    const includeProblem = !include
+      ? 'include is required (a file glob such as "*.cc" or a file name like "Makefile")'
+      : include === "*"
+        ? 'include "*" is not allowed; use a specific glob such as "*.cc", "*.{h,hpp,cpp,cc}", or a file name like "Makefile"'
+        : null
     const problems = [
       pattern ? null : "pattern is required",
       intentText ? null : "intent is required (a short phrase stating why you need this search)",
-      include ? null : 'include is required (a file glob such as "*.cc"; use "*" to search all files)',
+      includeProblem,
     ].filter(Boolean) as string[]
     if (problems.length) {
       const error = problems.join("; ")
