@@ -251,6 +251,10 @@
       "type": "remote",
       "url": "https://mcp.tavily.com/mcp/?tavilyApiKey={env:TAVILY_API_KEY}",
       "enabled": true
+    },
+    "heimdall": {
+      "type": "remote",
+      "url": "http://192.168.1.246:8996/mcp"
     }
   },
 

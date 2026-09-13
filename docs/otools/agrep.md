@@ -205,7 +205,7 @@ SELECT * FROM agrep_inject_records ORDER BY inject_count DESC;
 <正常 rg 输出>
 
 Reminder:
-[proto_gen_filter]: generated files like "addressbook.pb.h" are filtered out; you should not read generated code — the .proto definition is enough.
+[proto_gen_filter]: generated files like "addressbook.pb.h" filtered out; do not read generated code — the .proto is enough.
 [dep_search]: this code is indexed. For faster structural code search, use the dep_search_* tools with project "brpc".
 ```
 

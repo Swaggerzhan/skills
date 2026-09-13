@@ -70,6 +70,9 @@ noise. Reserve comments for knowledge the code cannot convey on its own:
 attention points, complex algorithms, forced compatibility workarounds,
 special cases, known pitfalls, and tricky protocol or algorithm requirements.
 Such comments explain why, not what.
+Comments must be self-contained: never reference design documents or other
+non-code materials (e.g. "see design doc X", "see decision 10"); restate
+needed content directly in the comment.
 
 Make the smallest complete
 change, follow existing patterns, and keep documentation consistent with code.

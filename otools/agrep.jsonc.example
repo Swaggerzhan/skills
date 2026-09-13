@@ -1,0 +1,12 @@
+{
+  // agrep 配置示例：复制为 ~/.config/otools/agrep.jsonc 后按需修改。
+  // 文件缺失、解析失败或 mysql 任一字段缺失 → 记录静默关闭（WARN 一行），
+  // 搜索功能不受影响。
+  "mysql": {
+    "endpoint": "127.0.0.1:3306", // host[:port]，无端口默认 3306
+    "username": "agrep",
+    "password": "change-me",
+    "database": "opencode" // 库须预先存在，工具只建表
+  },
+  "proto_gen_file_filter": true // 默认 true 即启用 protobuf 生成代码过滤（排除与提示）；需关闭时手动改为 false
+}
