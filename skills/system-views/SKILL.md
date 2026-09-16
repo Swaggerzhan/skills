@@ -43,8 +43,8 @@ Rules for drawing an architecture diagram:
 - each channel edge labeled with the protocol (RPC, queue, shared storage…)
   and the direction; mark what flows over it — control or data — on the edge
   or in the text below
-- facts that don't fit in the diagram: mark the spot with a short annotation
-  and explain it under the diagram
+- facts that don't fit in the diagram: mark the spot with a note marker and
+  explain it under the diagram (marker format: see Rules)
 
 ```mermaid
 graph LR
@@ -160,6 +160,13 @@ focused HTML file and open it.
   carries state the reader needs
 - every edge gets a verb label ("triggers" / "reads" / "writes"); inferred
   edges dashed or marked `?`
+- long explanations stay out of the view: the edge or step keeps its short
+  label and gets a note marker — `(1)`, `(2)`, … numbered per view in
+  order of appearance — with the notes directly under the view as
+  `(1): …`, `(2): …`; the view reads at a glance, the detail sits one
+  glance below (a bare digit reads as data — a count, a version; the
+  parens mark a note). In mermaid graph node/edge labels, parens break
+  parsing — quote the label: `A["submit (1)"]`
 - labels in plain language; symbol names live in the references
 - references use stable symbols + file (`Class::method`, file); line numbers
   only when asked

@@ -37,12 +37,32 @@ renderings, and rules. They are not restated here.
 
 ## Implementation
 
+Data structures come before algorithms — that is the reading order, not
+the thinking order. Algorithms speak in the structures' vocabulary, so
+the reader meets the structures first. The derivation runs the other
+way: the flows in Proposed demand access patterns — lookup by X, range
+scan by Y, enumerate children of Z — and each structure exists to serve
+one. Record that on the structure itself. An access pattern with no
+structure is a gap; a structure with no access pattern is waste.
+
 **Data structures** — state them exactly, in the storage medium's own
 terms:
 
 - persisted in a raft state machine → the proto definition, verbatim
 - in a database → the SQL schema
 - in memory → the project language; an index in C++ is `std::map<xxx, yyy>`
+
+An index is stated with more than its declaration:
+
+- **serves** — the access pattern (and its flow) the index exists for
+- **scale** — entry count and footprint, with the assumption behind the
+  numbers; feeds Capacity estimates
+- **maintained by** — every write path that inserts, updates, or deletes
+  entries, and the consistency this gives readers (same raft apply, same
+  transaction, async rebuild); a write path that forgets the index is
+  the classic index bug
+- **lifecycle** — persisted with the data, replayed from the log at
+  startup, or rebuilt on demand
 
 **Algorithms** — pick the few that matter: the longest flows, the ones
 that most express the design — judge by what the design hinges on. For a
